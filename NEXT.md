@@ -3,7 +3,6 @@
 Read this first in a new session, then `CLAUDE.md` for the rules.
 Last updated: 2026-10-19. **Live: build 7**; build 8 (Skyrim-ish village names) is in a PR.
 **Next:** the user playtests (PC + iPad + phone, solo and co-op) and sends notes; fix those in one PR.
-Open question: rename the Greybeards too (e.g. Arnveir, Borvi, Einhart), or keep their real Skyrim names?
 
 ## Live now
 https://seskiramadhan.github.io/Frostbound/ (merging into `master` deploys; players tap ↻ in the Bag)
@@ -20,13 +19,13 @@ https://seskiramadhan.github.io/Frostbound/ (merging into `master` deploys; play
 | Round 7 | Main story: the Greybeards, The Way of the Voice, Ustengrav | #19 |
 | Round 8 | Day/night (night raids) + rocks you can stand on | #20 |
 | Camera | Look up freely (sky, dragons overhead): the camera keeps its angle when the ground pushes it up (build 7) | #22 |
-| Names | Village names that sound like Skyrim but aren't real: Riverholt, Jarl Balgrim, Lukas, Delphina (the inn's "mysterious friend"), Faendir the Hunter, Alvar, the Snoring Giant (build 8) | names PR |
+| Names | Village names that sound like Skyrim but aren't real: Riverholt, Jarl Balgrim, Lukas, Delphina (the inn's "mysterious friend"), Faendir the Hunter, Alvar, the Snoring Giant; the Greybeards are Masters Arnveir, Borvi and Einhart (build 8) | names PR |
 
 ## The game today (build 8)
 
 **Main story (close to Skyrim):** The Jarl's Summons (Jarl Balgrim) → The Howling Den (Frostfang Den, Alpha
 Wolf; TIID word wall) → Dragon Rising (Bleakrock Barrow, FUS word wall, the first dragon, its soul gives
-YOL) → **"DOVAHKIIN!"** → The Way of the Voice (High Hrothgar, Master Arngeir; shout for the Greybeards;
+YOL) → **"DOVAHKIIN!"** → The Way of the Voice (High Hrothgar, Master Arnveir; shout for the Greybeards;
 Ustengrav: the horn's pedestal is empty, a note sends you to Delphina at the Snoring Giant; bring the Horn of
 Jurgen Windcaller back → blessing: shouts recharge 25% faster) → The World-Eater (summit; phase 1 airborne,
 phase 2 grounded below 60% HP) → ending card, sunny valley, "Dragonborn".
@@ -81,9 +80,9 @@ History and Website Data") deletes the save: tell players to use ↻ to update i
 Blacksmith + dragon bone gear, a legendary dragon, buying a house, legendary skills, a Fire button /
 tutorial, a Dragonstone in Bleakrock Barrow, a second region, co-op N4 relay (8–10 players).
 Dropped: "The Raiders' Nest" fort siege.
-**Naming:** some names come straight from Skyrim (shout words, Dragonborn, World-Eater, Greybeards,
+**Naming:** some names come straight from Skyrim (shout words, Dragonborn, World-Eater, the Greybeards as a group,
 High Hrothgar, Ustengrav, the Horn of Jurgen Windcaller; "Bleakrock Barrow" ≈ "Bleak Falls Barrow").
-Village names are Skyrim sound-alikes on purpose (the user wants "similar, not real"). Fine for a personal
+Village and Greybeard names are Skyrim sound-alikes on purpose (the user wants "similar, not real"). Fine for a personal
 fan game; rename the rest if the user ever wants to share it widely.
 
 ## Co-op: known gaps

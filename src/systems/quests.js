@@ -51,7 +51,7 @@ export const QUESTS = {
     steps: [
       { text: 'Climb to High Hrothgar', done: w => !!w.visited.monastery,
         target: w => ({ level: w.valley, pos: w.entrances.monastery.front }) },
-      { text: 'Speak with Master Arngeir', done: w => !!w.flags.metGreybeards, target: greybeard },
+      { text: 'Speak with Master Arnveir', done: w => !!w.flags.metGreybeards, target: greybeard },
       { text: 'Show the Greybeards your Voice', done: w => !!w.flags.voiceTested,
         target: w => ({ level: w.monastery, pos: w.monastery.center }) },
       { text: 'Retrieve the Horn of Jurgen Windcaller from Ustengrav', done: w => !!w.flags.hornNote,

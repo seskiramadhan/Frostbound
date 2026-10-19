@@ -190,12 +190,12 @@ function sven(c) {
   return { text, options: o };
 }
 
-// Master Arngeir speaks for the Greybeards; the other masters stay silent.
+// Master Arnveir speaks for the Greybeards; the other masters stay silent.
 function arngeir(c) {
   const { quests: q, flags, inventory: inv } = c;
   const step = q.stepText('wayOfTheVoice'), o = [];
   let text;
-  if (step === 'Speak with Master Arngeir') {
+  if (step === 'Speak with Master Arnveir') {
     text = 'So. A Dragonborn appears, at the very hour the dragons return. We are the Greybeards. Few are called to High Hrothgar.';
     o.push({ label: 'You summoned me.', run: () => {
       flags.metGreybeards = true;
