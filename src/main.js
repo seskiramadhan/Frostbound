@@ -220,7 +220,11 @@ events.on('skillUp', ({ id, name, level }) => {
 events.on('perk', ({ id, perk }) => hud.announce(`${CONFIG.skills[id].name} mastered`, `Perk unlocked: ${perk.name}. ${perk.desc}`));
 events.on('questStarted', ({ name, text }) => { hud.announce(`Quest started: ${name}`, text); save(); });
 events.on('questStep', ({ text }) => { hud.toast(`New objective: ${text}`); save(); });
-events.on('questDone', ({ name }) => { hud.announce(`Quest completed: ${name}`); save(); });
+events.on('questDone', ({ name }) => {
+  hud.announce(`Quest completed: ${name}`);
+  if (quests.isDone('dragonRising')) hud.announce('More of the story awaits', 'The tale continues in a future update.');
+  save();
+});
 events.on('shoutLearned', ({ def }) => hud.announce(`Word of Power: ${def.word}`, `${def.name}. ${IS_TOUCH ? 'Tap the shout button' : 'Press Q'} to use it.`));
 events.on('shout', ({ id }) => tpCam.shake(id === 'slowTime' ? 0.15 : 0.35));
 events.on('bowToggled', ({ bowMode }) => hud.toast(bowMode ? 'Bow drawn: hold to aim, release to shoot' : 'Sword drawn'));
