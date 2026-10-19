@@ -43,8 +43,8 @@ end of every piece of work (what's done, what's next).
 - **Combat:** melee (sword), bow, one magic school (fire)
 - **Learn by doing:** skills level up by use (One-Handed, Archery, Destruction,
   Sneak, Block). No classes. Maxing a skill unlocks a perk.
-- **Shouts (3):** Push, Slow Time, Fire Breath, learned at word walls in dungeons,
-  with cooldowns
+- **Shouts (3 + 1 hidden):** Push, Slow Time, Fire Breath, learned at word walls and from the
+  first dragon's soul, with cooldowns; Ice Form is the hidden 4th (post-game)
 - **Sneak:** crouch, stealth meter, sneak attacks deal bonus damage, stealing
 - **Loot:** chests, enemy drops, simple inventory (weapons, armor, potions, gold)
 - **Health / Stamina / Magicka** bars
@@ -53,15 +53,18 @@ end of every piece of work (what's done, what's next).
 - One valley, kept small:
   - **Village** (hub: merchant, quest givers, inn)
   - **Forest** (wolves, bandits)
-  - **3–4 dungeons** (caves/ruins, each with a word wall or a key item)
+  - **3–4 dungeons** (caves/ruins, each with a word wall or a key item): Frostfang Den,
+    Bleakrock Barrow, Ustengrav
+  - **High Hrothgar** (the Greybeards, halfway up the peak) and a **bandit camp** in the forest
   - **Mountain peak** (final dragon)
 - A roaming dragon randomly circles the valley
 - Day/night cycle (12-minute days; raids can come at night)
 
 ## Quests
-- **Main quest (~5 steps):** village → first dungeon → learn shouts →
-  first dragon → climb the peak → World-Eater
-- **Side quests (5–6):** clear the cave, retrieve the sword, deliver the letter, etc.
+- **Main quest:** village → first dungeon → learn shouts → first dragon → "DOVAHKIIN!" and the
+  Greybeards (The Way of the Voice) → climb the peak → World-Eater. Stays close to Skyrim.
+- **Side quests (5–6):** pelts, the ancestor's blade, the letter, the barrow, the bandit camp, plus the
+  Jarl's repeatable requests and raids (original, not from Skyrim)
 - Simple quest log + objective marker
 
 ## End game
@@ -108,8 +111,9 @@ competitive PvP, matchmaking, accounts/servers that cost money.
 2. ✅ **Combat:** melee + block + jump, one enemy (wolf) with basic AI, health/stamina
 3. ✅ **First quest:** one dungeon, loot + inventory, skill leveling, save/load
 4. ✅ **Dragons:** dragon AI + fight, word walls, the 3 shouts (+ bow, Archery)
-5. ⬜ **Full game:** village + NPCs, main + side quests, final boss, post-game, audio, polish
-   (✅ 5a village + 5b quests; ✅ 5c boss/ending/post-game; ✅ 5d audio; see NEXT.md)
+5. ✅ **Full game:** village + NPCs, main + side quests, final boss, post-game, audio
+   (5a–5d done; later rounds added sneak, magic, raids, bandits, levels, Greybeards, day/night).
+   Ongoing: polish and balance from playtesting (see NEXT.md)
 
 Co-op phases slot in between:
 - ✅ **N1:** transport + lobby (room code / `?join=`), see each other move
@@ -132,8 +136,8 @@ src/
                        # entrances, word walls), village (Frosthollow), summit (boss arena),
                        # monastery (High Hrothgar, the Greybeards),
                        # defenses (barricades, bell, watchtower), camp (bandits), chest, fx
-  entities/            # player, creature (wolf/draugr AI) + wolfModel/draugrModel,
-                       # dragon, npc (villagers), remotePlayer (co-op), model (helpers)
+  entities/            # player, creature (wolf/draugr/bandit/guard AI) + wolfModel/draugrModel,
+                       # dragon, npc (villagers, Greybeards), remotePlayer (co-op), model (helpers)
   systems/             # events, entities (id registry), physics, combat, inventory,
                        # skills, shouts, projectiles (arrows), magic (fire), stealth
                        # (meter, witnesses), raid (waves, guards), jobs (Jarl's requests),
@@ -160,8 +164,8 @@ src/
 - **Main story:** The Jarl's Summons → The Howling Den → Dragon Rising → The Way of the Voice (Greybeards,
   High Hrothgar, Ustengrav, the Horn) → The World-Eater. Story switches live in `flags`.
 - **Post-game** (after `flags.victory`): random dragon attacks, dungeons refill with a higher
-  `tier` (tougher enemies, better chests), Ice Form secret wall, New Game+ (`ng` in the save;
-  keeps skills, scales enemies via `CONFIG.postGame`).
+  `tier` (better chests; their enemies scale with your level), Ice Form secret wall, New Game+
+  (`ng` in the save; keeps skills, scales enemies via `CONFIG.postGame`).
 - **Creatures** share one AI (`entities/creature.js`); a config section picks the body
   (`body: 'wolf' | 'draugr'`). Bosses have `boss: true` + `saveKey`. `team`/`hunts` make
   guards (team 'player', hunting 'beast'); `raider: true` marches on the village and hits barricades.
