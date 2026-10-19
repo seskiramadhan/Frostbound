@@ -346,6 +346,18 @@ export const CONFIG = {
     maxParticles: 500,
   },
 
+  // Online co-op (N1: see each other). PeerJS is loaded only when co-op is opened.
+  net: {
+    peerjsUrl: 'vendor/peerjs-1.5.5.min.js',
+    roomPrefix: 'frostbound-v1-',  // PeerJS id of a host = prefix + room code
+    codeLength: 5,
+    maxPlayers: 4,
+    sendRate: 15,          // pose updates per second
+    interpDelay: 0.12,     // remote players are drawn this far in the past, for smoothness
+    joinTimeout: 15,       // seconds
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
+  },
+
   save: {
     key: 'frostbound.save.v1',
     autosaveInterval: 30,  // seconds

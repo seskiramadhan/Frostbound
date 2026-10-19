@@ -334,12 +334,7 @@ export class Player {
     this.#setState('move');
   }
 
-  setLook(weapon, armor) {
-    const { blade, tunic } = this.model;
-    blade.material.color.setHex(weapon.color);
-    blade.scale.y = weapon.length;
-    tunic.material.color.setHex(armor.color);
-  }
+  setLook(weapon, armor) { applyLook(this.model, weapon, armor); }
 
   die() {
     this.alive = false;
@@ -349,70 +344,85 @@ export class Player {
   // Render-time: interpolate between fixed steps and animate.
   render(alpha, out) {
     out.lerpVectors(this.prevPos, this.pos, alpha);
-    const { root, body, legs, arms, shadow } = this.model;
+    const { root, shadow } = this.model;
     root.position.copy(out);
     root.rotation.y = lerpAngle(this.prevFacing, this.facing, alpha);
 
-    const walk = Math.min(1, this.speed / P.walkSpeed);
-    const swing = Math.sin(this.walkPhase) * walk * 0.7;
-    const [armR, armL] = arms;
-    legs[0].rotation.set(swing, 0, 0); legs[1].rotation.set(-swing, 0, 0);
-    armR.rotation.set(-0.45 - swing * 0.3, 0, 0);
-    armL.rotation.set(swing * 0.8, 0, 0);
-    body.rotation.set(0, 0, 0);
-    body.position.y = Math.abs(Math.cos(this.walkPhase)) * 0.05 * walk;
-
-    this.model.sword.visible = !this.bowMode;
-    this.model.bow.visible = this.bowMode;
-    if (this.bowMode && this.state !== 'draw' && this.state !== 'shot') armL.rotation.x = -0.5 + swing * 0.4;
-
-    const t = this.stateTime;
-    switch (this.state) {
-      case 'draw': {
-        const k = clamp01(this.drawTime / BW.fullDraw);
-        armL.rotation.set(-1.55, 0, -0.15);                     // bow arm straight out
-        armR.rotation.set(-1.45, 0, lerp(-0.2, -1.1, k));       // string hand pulled back
-        body.rotation.y = -0.25;
-        break;
-      }
-      case 'shot':
-        armL.rotation.set(-1.55, 0, -0.15);
-        armR.rotation.set(-1.2, 0, -0.3);
-        break;
-      case 'shout': {
-        const k = Math.sin(clamp01(t / 0.5) * Math.PI);
-        body.rotation.x = 0.35 * k;
-        armR.rotation.set(0.6 * k, 0, 0.5 * k);
-        armL.rotation.set(0.6 * k, 0, -0.5 * k);
-        break;
-      }
-      case 'attack': {
-        if (t < A.windup) {
-          armR.rotation.x = lerp(-0.45, -2.7, clamp01(t / A.windup));
-        } else {
-          const k = clamp01((t - A.windup) / (A.recover * 0.35));
-          const back = clamp01((t - A.windup - A.recover * 0.5) / (A.recover * 0.5));
-          armR.rotation.x = lerp(lerp(-2.7, -1.0, 1 - (1 - k) * (1 - k)), -0.45, back);
-          body.rotation.x = 0.18 * (1 - back);
-        }
-        break;
-      }
-      case 'block':
-        armR.rotation.set(-1.4, 0, 0.8);
-        armL.rotation.set(-1.1, 0, -0.5);
-        break;
-      case 'stagger':
-        body.rotation.x = -0.35 * (1 - clamp01(t / this.staggerTime));
-        break;
-      case 'dead':
-        body.rotation.x = -Math.PI / 2 * clamp01(t / 0.5);
-        body.position.y = 0.2 * clamp01(t / 0.5);
-        armR.rotation.x = -2.5; armL.rotation.x = -2.5;
-        break;
-    }
-    if (!this.grounded) { legs[0].rotation.x = 0.6; legs[1].rotation.x = -0.2; }
+    animate(this.model, this);
 
     shadow.position.set(out.x, this.level.heightAt(out.x, out.z) + 0.05, out.z);
     return out;
   }
+}
+
+// Pose the model for a frame. `s` needs: speed, walkPhase, bowMode, state, stateTime,
+// drawTime, staggerTime, grounded. Shared with co-op remote players.
+export function animate(model, s) {
+  const { body, legs, arms } = model;
+  const walk = Math.min(1, s.speed / P.walkSpeed);
+  const swing = Math.sin(s.walkPhase) * walk * 0.7;
+  const [armR, armL] = arms;
+  legs[0].rotation.set(swing, 0, 0); legs[1].rotation.set(-swing, 0, 0);
+  armR.rotation.set(-0.45 - swing * 0.3, 0, 0);
+  armL.rotation.set(swing * 0.8, 0, 0);
+  body.rotation.set(0, 0, 0);
+  body.position.y = Math.abs(Math.cos(s.walkPhase)) * 0.05 * walk;
+
+  model.sword.visible = !s.bowMode;
+  model.bow.visible = s.bowMode;
+  if (s.bowMode && s.state !== 'draw' && s.state !== 'shot') armL.rotation.x = -0.5 + swing * 0.4;
+
+  const t = s.stateTime;
+  switch (s.state) {
+    case 'draw': {
+      const k = clamp01(s.drawTime / BW.fullDraw);
+      armL.rotation.set(-1.55, 0, -0.15);                     // bow arm straight out
+      armR.rotation.set(-1.45, 0, lerp(-0.2, -1.1, k));       // string hand pulled back
+      body.rotation.y = -0.25;
+      break;
+    }
+    case 'shot':
+      armL.rotation.set(-1.55, 0, -0.15);
+      armR.rotation.set(-1.2, 0, -0.3);
+      break;
+    case 'shout': {
+      const k = Math.sin(clamp01(t / 0.5) * Math.PI);
+      body.rotation.x = 0.35 * k;
+      armR.rotation.set(0.6 * k, 0, 0.5 * k);
+      armL.rotation.set(0.6 * k, 0, -0.5 * k);
+      break;
+    }
+    case 'attack': {
+      if (t < A.windup) {
+        armR.rotation.x = lerp(-0.45, -2.7, clamp01(t / A.windup));
+      } else {
+        const k = clamp01((t - A.windup) / (A.recover * 0.35));
+        const back = clamp01((t - A.windup - A.recover * 0.5) / (A.recover * 0.5));
+        armR.rotation.x = lerp(lerp(-2.7, -1.0, 1 - (1 - k) * (1 - k)), -0.45, back);
+        body.rotation.x = 0.18 * (1 - back);
+      }
+      break;
+    }
+    case 'block':
+      armR.rotation.set(-1.4, 0, 0.8);
+      armL.rotation.set(-1.1, 0, -0.5);
+      break;
+    case 'stagger':
+      body.rotation.x = -0.35 * (1 - clamp01(t / s.staggerTime));
+      break;
+    case 'dead':
+      body.rotation.x = -Math.PI / 2 * clamp01(t / 0.5);
+      body.position.y = 0.2 * clamp01(t / 0.5);
+      armR.rotation.x = -2.5; armL.rotation.x = -2.5;
+      break;
+  }
+  if (!s.grounded) { legs[0].rotation.x = 0.6; legs[1].rotation.x = -0.2; }
+
+}
+
+// Recolour/resize the sword blade and tunic for the equipped gear.
+export function applyLook({ blade, tunic }, weapon, armor) {
+  blade.material.color.setHex(weapon.color);
+  blade.scale.y = weapon.length;
+  tunic.material.color.setHex(armor.color);
 }

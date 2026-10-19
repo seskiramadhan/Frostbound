@@ -74,6 +74,8 @@ competitive PvP, matchmaking, accounts/servers that cost money.
   replace PeerJS for 8–10 player dragon hunts.
 - **Transport-agnostic:** game code talks to `net/transport.js`, never to PeerJS
   directly, so swapping PeerJS for a relay touches one file.
+- **PeerJS:** pinned local copy in `vendor/` (MIT, licence alongside), loaded only
+  when someone opens co-op. Signalling uses the free PeerJS cloud server.
 - **Joining:** host gets a short room code; share it or a `?join=CODE` link.
 - **Authority:** host decides enemies, damage, deaths, loot and quest state.
   Each player controls their own movement; guests send hits, host validates.

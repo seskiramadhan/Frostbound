@@ -18,3 +18,9 @@ Static files only: push to GitHub and enable GitHub Pages (or drop the folder on
 
 ## Cloud sessions
 Claude Code cloud sessions can commit and push to this repo directly (tested 2026-10-19).
+
+## Co-op (preview)
+Bag → **Co-op** (or "Play with friends" on the start screen) → **Host a game** gives a
+5-letter room code and a share link (`?join=CODE`). Up to 4 players. Right now you
+see each other move; shared enemies come next. Works best on Wi-Fi: some mobile
+networks block direct phone-to-phone connections.

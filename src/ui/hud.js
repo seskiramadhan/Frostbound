@@ -150,6 +150,13 @@ export class Hud {
 
   setSlow(on) { this.slowEl.classList.toggle('on', on); }
 
+  // Small 'room CODE · 2/4' chip while in co-op.
+  setCoop(session) {
+    const chip = this.coopChip ??= document.getElementById('coop-chip');
+    const text = session.active ? `${session.code} · ${session.count}/${CONFIG.net.maxPlayers}` : '';
+    if (chip.textContent !== text) { chip.textContent = text; chip.style.display = text ? 'block' : 'none'; }
+  }
+
   setBoss(entity) {
     this.bossEl.style.display = entity ? 'block' : 'none';
     if (!entity) return;

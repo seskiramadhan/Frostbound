@@ -24,6 +24,8 @@ import { loadSave, writeSave, clearSave } from './systems/save.js';
 import { ThirdPersonCamera } from './camera.js';
 import { Hud } from './ui/hud.js';
 import { Menu } from './ui/menu.js';
+import { CoopPanel } from './ui/coop.js';
+import { Session } from './net/session.js';
 
 const R = CONFIG.render;
 const $ = id => document.getElementById(id);
@@ -87,7 +89,9 @@ const world = {
 const quests = new Quests(events, world);
 
 const hud = new Hud();
-const menu = new Menu(inventory, skills, player, shouts);
+const session = new Session(events, scene, player, inventory);
+const coopPanel = new CoopPanel(session);
+const menu = new Menu(inventory, skills, player, shouts, coopPanel);
 const input = new Input(renderer.domElement, $('joy'), $('joy-knob'), {
   jump: $('btn-jump'), interact: $('btn-interact'), menu: $('btn-bag'), shout: $('btn-shout'), bow: $('btn-bow'),
 });
@@ -216,6 +220,9 @@ events.on('questDone', ({ name }) => { hud.announce(`Quest completed: ${name}`);
 events.on('shoutLearned', ({ def }) => hud.announce(`Word of Power: ${def.word}`, `${def.name}. ${IS_TOUCH ? 'Tap the shout button' : 'Press Q'} to use it.`));
 events.on('shout', ({ id }) => tpCam.shake(id === 'slowTime' ? 0.15 : 0.35));
 events.on('bowToggled', ({ bowMode }) => hud.toast(bowMode ? 'Bow drawn: hold to aim, release to shoot' : 'Sword drawn'));
+events.on('netPlayerJoined', ({ name }) => { hud.toast(`${name} joined the game`); if (menu.open) menu.render(); });
+events.on('netPlayerLeft', ({ name }) => { hud.toast(`${name} left the game`); if (menu.open) menu.render(); });
+events.on('netEnded', ({ reason }) => { hud.toast(reason); if (menu.open) menu.render(); });
 events.on('dragonRoar', () => { hud.announce('A dragon approaches!'); tpCam.shake(0.45); });
 events.on('dragonDowned', () => hud.toast('The dragon crashes to the ground!'));
 events.on('dragonDead', () => {
@@ -267,11 +274,12 @@ if (saved) applySave(saved);
 for (const d of Object.values(dungeons)) if (d.wordWall) d.setWordLearned(shouts.known.has(d.wordWall.shout));
 applyStats(player, inventory, skills);
 hud.setStartText(!!saved);
+const joinCode = new URLSearchParams(location.search).get('join');   // invite link: ?join=CODE
+if (joinCode) $('cta').textContent = `${IS_TOUCH ? 'Tap' : 'Click'} to join room ${joinCode.toUpperCase()}`;
 
 // ---- Start / pause / menu ----
 let started = false;
-hud.overlay.addEventListener('click', e => {
-  if (e.target.id === 'newgame') return;
+function startGame(lock = true) {
   if (!started) {
     started = true;
     quests.start('howlingDen');   // no-op when loaded from a save
@@ -279,9 +287,21 @@ hud.overlay.addEventListener('click', e => {
   if (IS_TOUCH) {
     hud.showOverlay(false);
     document.documentElement.requestFullscreen?.().catch(() => {});
-  } else {
+  } else if (lock) {
     input.requestLock();
   }
+}
+hud.overlay.addEventListener('click', e => {
+  if (e.target.id === 'newgame' || e.target.id === 'coop-start') return;
+  const firstJoin = joinCode && !started && !session.active;
+  startGame(!firstJoin);
+  if (firstJoin) { hud.showOverlay(false); openMenu('coop'); coopPanel.join(joinCode, () => menu.open && menu.render()); }
+});
+$('coop-start').addEventListener('click', e => {
+  e.stopPropagation();
+  startGame(false);
+  hud.showOverlay(false);
+  openMenu('coop');
 });
 $('newgame').addEventListener('click', e => {
   e.stopPropagation();
@@ -290,9 +310,9 @@ $('newgame').addEventListener('click', e => {
   location.reload();
 });
 
-function openMenu() {
+function openMenu(tab) {
   if (!started || menu.open || !player.alive) return;
-  menu.show(true);
+  menu.show(true, tab);
   if (!IS_TOUCH) document.exitPointerLock?.();
 }
 function closeMenu() {
@@ -311,8 +331,9 @@ addEventListener('pagehide', save);
 // ---- Fixed-step logic ----
 let saveTimer = 0, dragonTimer = 0;
 const SPAWN = new THREE.Vector3(CONFIG.player.spawn[0], 0, CONFIG.player.spawn[1]);
-function tick(dt) {
-  const cmd = input.update();
+const IDLE_CMD = { move: { x: 0, y: 0 }, run: false, attack: false, block: false, draw: false, jump: false, interact: false, shout: false, toggleBow: false };
+function tick(dt, controls) {
+  const cmd = controls ? input.update() : IDLE_CMD;   // co-op: the world keeps going while you're in a menu
   if (player.canRespawn && cmd.attack) {
     const inDungeon = player.level !== valley;
     player.respawn(player.level, inDungeon ? player.level.start : SPAWN, inDungeon ? 0 : Math.PI);
@@ -361,13 +382,15 @@ function frame(now) {
   const dt = Math.min((now - last) / 1000, CONFIG.loop.maxFrameTime);
   last = now;
 
-  const playing = started && input.active && !menu.open;
+  // Single player pauses in menus; co-op never pauses
+  const controls = input.active && !menu.open;
+  const playing = started && (controls || session.active);
   if (playing) {
     const look = input.consumeLook();
-    tpCam.look(look.x, look.y);
+    if (controls) tpCam.look(look.x, look.y);
     acc += dt;
     while (acc >= STEP) {
-      tick(STEP);
+      tick(STEP, controls);
       acc -= STEP;
     }
   } else {
@@ -382,6 +405,9 @@ function frame(now) {
   for (const c of chests) c.update(dt);
   for (const d of Object.values(dungeons)) d.update(dt);
   if (playing) fx.update(dt * (shouts.timeScale < 1 ? 0.6 : 1));
+  if (started) session.update(dt);
+  session.render(dt, player.level.key ?? 'valley', levels);
+  hud.setCoop(session);
   tpCam.update(dt, renderPos);
   // Carried light sits between player and camera so the side you see is lit
   env.torch.position.set(renderPos.x, renderPos.y + TORCH.height, renderPos.z).lerp(camera.position, 0.45);
@@ -420,7 +446,7 @@ addEventListener('resize', () => {
 // Debug handle for testing in the console
 window.frostbound = {
   player, creatures, dragon, entities, events, inventory, skills, shouts, quests, chests, dungeons, den, barrow,
-  valley, entrances, interactables, projectiles, fx, save, menu,
+  valley, entrances, interactables, projectiles, fx, save, menu, session, coopPanel,
   tpCam,
   go: (level, at, facing = 0) => { player.moveTo(level, at, facing); enterLevel(level, facing); },
 };

@@ -1,4 +1,4 @@
-// Inventory + skills menu. Opening it pauses the game (single player).
+// Bag menu: items, shouts, skills, co-op. Opening it pauses the game (single player only).
 import { CONFIG } from '../config.js';
 import { SKILL_IDS } from '../systems/skills.js';
 import { SHOUT_IDS } from '../systems/shouts.js';
@@ -14,11 +14,12 @@ function stat(def) {
 }
 
 export class Menu {
-  constructor(inventory, skills, player, shouts) {
+  constructor(inventory, skills, player, shouts, coop) {
     this.inventory = inventory;
     this.skills = skills;
     this.player = player;
     this.shouts = shouts;
+    this.coop = coop;
     this.el = $('menu');
     this.list = $('menu-list');
     this.goldEl = $('menu-gold');
@@ -31,8 +32,9 @@ export class Menu {
     }
   }
 
-  show(open) {
+  show(open, tab) {
     this.open = open;
+    if (tab) this.tab = tab;
     this.el.style.display = open ? 'flex' : 'none';
     if (open) this.render();
   }
@@ -43,6 +45,7 @@ export class Menu {
     this.list.innerHTML = '';
     if (this.tab === 'items') this.#renderItems();
     else if (this.tab === 'shouts') this.#renderShouts();
+    else if (this.tab === 'coop') this.coop.render(this.list, () => this.open && this.render());
     else this.#renderSkills();
   }
 
