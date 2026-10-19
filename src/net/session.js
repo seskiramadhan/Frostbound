@@ -13,7 +13,7 @@ import { Mirror } from './mirror.js';
 
 const N = CONFIG.net;
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // no I/L/O/0/1 to avoid typos
-const WORLD_EVENTS = ['dragonRoar', 'dragonDowned', 'dragonDead'];
+const WORLD_EVENTS = ['dragonRoar', 'dragonDowned', 'dragonDead', 'huntStart'];
 
 export function randomCode() {
   let s = '';
@@ -42,7 +42,9 @@ export class Session {
       if (this.role !== 'host' || target.team === 'player') return;
       this.transport.broadcast({ k: MSG.EVENT, n: 'death', id: target.id, killer: this.#idOf(killer) });
     });
-    for (const n of WORLD_EVENTS) ev.on(n, () => { if (this.role === 'host') this.transport.broadcast({ k: MSG.EVENT, n }); });
+    for (const n of WORLD_EVENTS) {
+      ev.on(n, e => { if (this.role === 'host' && !e?.net) this.transport.broadcast({ k: MSG.EVENT, n, id: e?.dragon?.id, data: e?.data }); });
+    }
   }
 
   get active() { return this.role === 'host' || this.role === 'guest'; }
@@ -259,7 +261,7 @@ export class Session {
           const target = g.entities.get(m.id);
           if (target) this.events.emit('death', { target, killer: m.killer === this.myId ? g.player : null, net: true });
         } else if (WORLD_EVENTS.includes(m.n)) {
-          this.events.emit(m.n, { dragon: g.dragon, net: true });
+          this.events.emit(m.n, { dragon: g.entities.get(m.id) ?? g.dragon, data: m.data, net: true });
         }
         break;
     }

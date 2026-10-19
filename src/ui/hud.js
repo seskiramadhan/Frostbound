@@ -171,7 +171,7 @@ export class Hud {
     this.bossEl.style.display = entity ? 'block' : 'none';
     if (!entity) return;
     if (this.bossName.textContent !== entity.name) this.bossName.textContent = entity.name;
-    this.bossBar.style.transform = `scaleX(${Math.max(0, entity.hp) / entity.maxHp})`;
+    this.bossBar.style.transform = `scaleX(${Math.min(1, Math.max(0, entity.hp) / entity.maxHp)})`;
   }
 
   // Fade to black, run fn, fade back in.

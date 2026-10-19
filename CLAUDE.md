@@ -111,7 +111,7 @@ competitive PvP, matchmaking, accounts/servers that cost money.
 Co-op phases slot in between:
 - ✅ **N1:** transport + lobby (room code / `?join=`), see each other move
 - ✅ **N2:** host runs enemies and validates hits; shared fights, per-player loot
-- ⬜ **N3:** co-op dragon hunt
+- ✅ **N3:** co-op dragon hunts (host starts them; tougher each level)
 - ⬜ **N4 (later):** relay server for 8–10 players
 
 Finish and test a phase before starting the next one.

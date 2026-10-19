@@ -1,7 +1,7 @@
 # NEXT.md — where Frostbound stands and what's pending
 
 Read this first in a new session, then `CLAUDE.md` for the rules.
-Last updated: 2026-10-19 (after PR #7, co-op N2).
+Last updated: 2026-10-19 (round 1 of 3: announcement fix + co-op N3).
 
 ## Live now (merged to `master`, deployed to GitHub Pages)
 https://seskiramadhan.github.io/Frostbound/
@@ -14,10 +14,18 @@ https://seskiramadhan.github.io/Frostbound/
 | Phase 4 | Bleakrock Barrow + draugr, word walls, shouts FUS/TIID/YOL, bow + Archery, the dragon, quest "Dragon Rising" | #5 |
 | Co-op N1 | Rooms by 5-letter code / `?join=` link, see each other move (PeerJS, vendored) | #6 |
 | Co-op N2 | Shared fights: host runs every enemy, guests' hits validated, per-player loot | #7 |
+| Docs + fix | NEXT.md, CLAUDE.md refresh; big announcements queue (dragon soul message fix) | #8 |
+| Co-op N3 | Dragon hunts: host starts from the Co-op tab after Dragon Rising; tougher each level; gold for everyone | (this round) |
 
 **Story today:** start in the valley → The Howling Den (den, alpha, treasure) → Dragon Rising
 (barrow, FUS word wall, dragon arrives in the valley, soul → YOL). TIID's word wall is in Frostfang Den.
 After the dragon there is no more story yet (Phase 5).
+
+## Plan agreed with the user: 3 rounds, user tests after each
+1. **Round 1 (done, awaiting test):** announcement fix + co-op N3 dragon hunts.
+   User tests: co-op fight + a hunt with a friend, solo dragon difficulty, phone FPS.
+2. **Round 2:** Phase 5a village + 5b quests (merchant, NPCs, main story, side quests, quest log).
+3. **Round 3:** Phase 5c final boss + ending + post-game, then 5d audio + polish.
 
 ## Pending, in suggested order
 
@@ -29,13 +37,14 @@ After the dragon there is no more story yet (Phase 5).
 - [ ] Co-op on **mobile data** (4G/5G) — untested. Some carriers block WebRTC; would need a TURN relay (free tiers exist, e.g. Metered/OpenRelay) added to `CONFIG.net.iceServers`.
 
 ### 2. Small UX fixes already discussed (not done)
-- [ ] **Announcements collide:** "Dragon soul absorbed" is instantly replaced by "Quest completed: Dragon Rising". Queue `hud.announce()` so messages show one after another; then add a closing "More of the story awaits" line when the last available quest is done.
 - [ ] **Quick shout switching:** offered "hold the shout button 0.5 s to cycle shouts" (phone) and an **R** key (desktop). User asked how to switch; not yet confirmed they want it — today it's Bag → Shouts tab.
 - [ ] Standable rocks (rocks are only circle colliders, no top) + maybe a slightly higher jump. User said "okay for now".
 
-### 3. Co-op N3 — co-op dragon hunt (CLAUDE.md: after Phase 4)
-Builds on N2. Ideas: host can summon a dragon hunt from the Co-op tab once anyone has killed the first
-dragon; dragon HP already scales with player count; reward everyone. Also consider the co-op gaps below.
+### 3. Co-op N3 — done (round 1)
+Host-only "Start a dragon hunt" in Co-op tab, unlocked after the host finishes Dragon Rising. A second
+Dragon instance (`huntDragon`) is reused each hunt; level = host's `hunts` + 1 (saved per player);
+HP +30%/level, damage +15%/level, names from `CONFIG.hunt.names`; everyone present gets
+`goldPerLevel × level`. Solo random dragon hunts are still Phase 5c post-game.
 
 ### 4. Phase 5 — full game (suggested split, one PR each)
 - **5a Village hub** in the flat valley centre (`terrain.flatRadius`): merchant (sell pelts, buy potions/gear — gold has no use yet), inn, a few NPCs, a Jarl/elder who gives the main quest.
@@ -51,7 +60,8 @@ dragon; dragon HP already scales with player count; reward everyone. Also consid
 ## Co-op: known gaps (fine for now, revisit in N3 / Phase 5)
 - Quests are **not shared**: each player keeps their own quest progress (kills by anyone still count where a quest checks world state, e.g. the alpha being dead).
 - Chests and word walls are per player (local), not host-decided.
-- Only the host's quest summons the dragon.
+- Only the host's quest summons the story dragon; only the host starts hunts.
+- A hunt in progress is not saved (reload = hunt gone).
 - The world pauses if the **host** backgrounds the app (phones stop rendering hidden tabs).
 - A guest leaving a room reloads the page to restore their own world (by design).
 - Guests see dragon soul particles approximately (mirrored), not the exact host effect.

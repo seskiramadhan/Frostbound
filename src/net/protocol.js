@@ -9,7 +9,7 @@
 //                 reject  { msg }                  room full / different game version
 //                 hurt    { d, b, x, z }           an enemy hit you: raw damage, blocked?, from where
 //                 world   { list: [Enemy], slow }  every enemy's state, sendRate per second
-//                 ev      { n, id? , killer? }     one-off world events (death, dragonRoar, dragonDowned, dragonDead)
+//                 ev      { n, id?, killer?, data? }  one-off world events (death, dragonRoar, dragonDowned, dragonDead, huntStart)
 //                 joined  { id, name, look }
 //                 left    { id }
 //                 look    { id, look }
@@ -21,7 +21,7 @@
 //   flags: 1 = alive, 2 = visible
 import * as THREE from 'three';
 
-export const VERSION = 2;
+export const VERSION = 3;
 
 export const MSG = {
   HELLO: 'hello', POSE: 'pose', LOOK: 'look', HIT: 'hit', SHOUT: 'shout',

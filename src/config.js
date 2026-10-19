@@ -342,6 +342,14 @@ export const CONFIG = {
     soulTime: 3.5,
   },
 
+  // Co-op dragon hunts (N3): each hunt level makes the next dragon tougher.
+  hunt: {
+    hpPerLevel: 0.3,       // +30% health per hunt level
+    dmgPerLevel: 0.15,     // +15% damage per hunt level
+    goldPerLevel: 120,     // reward for everyone present
+    names: ['Elder Dragon', 'Frost Dragon', 'Blood Dragon', 'Ancient Dragon', 'Revered Dragon', 'Legendary Dragon'],
+  },
+
   fx: {
     maxParticles: 500,
   },
