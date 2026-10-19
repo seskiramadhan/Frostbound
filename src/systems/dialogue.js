@@ -46,13 +46,13 @@ function jarl(c) {
   let text;
   if (q.isActive('arrival')) {
     text = 'So you\'re the one who walked out of the snow. Good, I need a sword arm. Wolves from Frostfang Den '
-      + 'have been tearing into our flocks. Clear out that den and Frosthollow will owe you.';
+      + 'have been tearing into our flocks. Clear out that den and Riverholt will owe you.';
     o.push({ label: 'I\'ll deal with the wolves.', run: () => { flags.metJarl = true; q.start('howlingDen'); return false; } });
-  } else if (q.stepText('howlingDen') === 'Report to Jarl Hrolf') {
+  } else if (q.stepText('howlingDen') === 'Report to Jarl Balgrim') {
     text = 'The howling has stopped. You have my thanks, and the hold\'s gold. But I fear worse things wake. '
       + 'Old Bleakrock Barrow, north toward the peak, groans at night, and a shadow was seen over the ridge. Wings.';
     o.push({ label: 'I\'ll look into the barrow.', run: () => { flags.reportedDen = true; return false; } });
-  } else if (q.stepText('dragonRising') === 'Report to Jarl Hrolf') {
+  } else if (q.stepText('dragonRising') === 'Report to Jarl Balgrim') {
     text = 'A dragon, slain by your hand, and its soul taken into you! The old tales name such a one Dragonborn. '
       + 'Then the tales of the World-Eater on the peak may be true as well. Rest, and be ready.';
     o.push({ label: 'I will be ready.', run: () => { flags.reportedDragon = true; return false; } });
@@ -65,7 +65,7 @@ function jarl(c) {
   } else if (flags.victory) {
     text = c.confirmNg
       ? 'Begin anew? You will keep your skill, but the world forgets your deeds, and its beasts grow fiercer.'
-      : 'Hail, Dragonborn! The skies over Frosthollow are clear for the first time in an age. Songs will be sung of you.';
+      : 'Hail, Dragonborn! The skies over Riverholt are clear for the first time in an age. Songs will be sung of you.';
     if (c.confirmNg) {
       o.push({ label: 'Yes, start New Game+', run: () => { c.newGamePlus(); return false; } });
       o.push({ label: 'Not yet', run: () => { c.confirmNg = false; return true; } });
@@ -81,16 +81,16 @@ function jarl(c) {
     text = 'Dragonborn. The World-Eater stirs on the peak, and the sky darkens by the day.';
     o.push({ label: 'I\'m ready to face the World-Eater.', run: () => {
       q.start('worldEater');
-      c.done('Then go. The path starts at the foot of the peak, east of the barrow. Frosthollow stands with you.'); return true;
+      c.done('Then go. The path starts at the foot of the peak, east of the barrow. Riverholt stands with you.'); return true;
     } });
   } else {
-    text = 'Welcome to Frosthollow. Keep your blade sharp; these are hard days.';
+    text = 'Welcome to Riverholt. Keep your blade sharp; these are hard days.';
   }
   jarlJobs(c, o);
   if (q.isActive('jarlLetter') && inv.count('jarlLetter')) {
-    o.push({ label: 'Bera sent you this letter.', run: () => {
+    o.push({ label: 'Delphina sent you this letter.', run: () => {
       inv.remove('jarlLetter'); flags.letterDelivered = true;
-      c.done('Hmm, Bera wants guards on the north road. Fair. Tell her it is done.'); return true;
+      c.done('Hmm, Delphina wants guards on the north road. Fair. Tell her it is done.'); return true;
     } });
   }
   o.push(bye);
@@ -123,18 +123,18 @@ function innkeeper(c) {
       c.done('Something walks in Bleakrock Barrow. A wight, the old folk say. Put it back in the ground and drinks are on me.'); return true;
     } });
   }
-  if (q.stepText('wayOfTheVoice') === 'Meet your mysterious friend at the Sleeping Bear') {
+  if (q.stepText('wayOfTheVoice') === 'Meet your mysterious friend at the Snoring Giant') {
     o.push({ label: 'I\'m looking for whoever left this note.', run: () => {
       flags.hornGot = true; inv.remove('strangeNote'); inv.add('hornOfJurgen');
       c.done('Shh, not so loud. I left that note. I had to know the Dragonborn was real, and that you weren\'t a trap. '
         + 'Here\'s your horn; the Greybeards will want it. One day I\'ll tell you who I really am.'); return true;
     } });
   }
-  if (q.stepText('silenceBarrow') === 'Tell Bera the barrow is quiet') {
+  if (q.stepText('silenceBarrow') === 'Tell Delphina the barrow is quiet') {
     o.push({ label: 'The barrow is quiet now.', run: () => { flags.barrowReported = true; c.done('Then the dead sleep again. Here, you earned this.'); return true; } });
   }
   o.push(bye);
-  return { text: 'Welcome to the Sleeping Bear. Warm beds, warm mead.', options: o };
+  return { text: 'Welcome to the Snoring Giant. Warm beds, warm mead.', options: o };
 }
 
 function hunter(c) {
@@ -146,7 +146,7 @@ function hunter(c) {
       q.start('banditCamp');
       c.done('Bandits. They\'ve made camp in the western forest and they rob anyone on the road. Their chief is a brute. Break them, and I\'ll make it worth your while.'); return true;
     } });
-  } else if (q.stepText('banditCamp') === 'Tell Ulf the camp is broken') {
+  } else if (q.stepText('banditCamp') === 'Tell Faendir the camp is broken') {
     o.push({ label: 'The bandit chief is dead.', run: () => {
       flags.banditsReported = true;
       c.done('Ha! The road\'s safe again, for a while. Here, you earned this.'); return true;
@@ -155,7 +155,7 @@ function hunter(c) {
   if (!q.has('hunterPelts')) {
     o.push({ label: 'Need help with the wolves?', run: () => {
       q.start('hunterPelts');
-      c.done(`Bring me ${V.peltsWanted} wolf pelts and I\'ll pay better than Ingrid does.`); return true;
+      c.done(`Bring me ${V.peltsWanted} wolf pelts and I\'ll pay better than Lukas does.`); return true;
     } });
   } else if (q.isActive('hunterPelts')) {
     const have = inv.count('wolfPelt');
@@ -205,7 +205,7 @@ function arngeir(c) {
     text = 'Use your Thu\'um. Shout, here in the courtyard, and let us hear the dragon in your voice.';
   } else if (step === 'Retrieve the Horn of Jurgen Windcaller from Ustengrav') {
     text = 'Your last trial: bring us the Horn of Jurgen Windcaller from his tomb, Ustengrav, east of the valley.';
-  } else if (step === 'Meet your mysterious friend at the Sleeping Bear') {
+  } else if (step === 'Meet your mysterious friend at the Snoring Giant') {
     text = 'The horn was taken before you? Then follow the trail, Dovahkiin. The horn will find its way here.';
   } else if (step === 'Bring the Horn to the Greybeards') {
     text = 'You have returned.';

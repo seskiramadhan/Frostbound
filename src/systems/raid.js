@@ -1,4 +1,4 @@
-// Raids on Frosthollow. The player starts one (village bell, or the Jarl's "Defend" job); after a
+// Raids on Riverholt. The player starts one (village bell, or the Jarl's "Defend" job); after a
 // warning, 4 waves march in from the forest along lanes. Raiders break barricades and fight
 // guards and players. Win: every wave cleared. Lose: every barricade broken, or everyone down.
 // All units are made at startup (fixed entity ids for co-op) and reused. The host runs the raid;

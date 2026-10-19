@@ -133,7 +133,7 @@ src/
   input.js             # keyboard/mouse + touch -> one command object per tick
   camera.js            # third-person orbit camera (pulls in at walls, shake)
   world/               # terrain, props, environment (fog/light/snow), dungeon (ASCII maps,
-                       # entrances, word walls), village (Frosthollow), summit (boss arena),
+                       # entrances, word walls), village (Riverholt), summit (boss arena),
                        # monastery (High Hrothgar, the Greybeards),
                        # defenses (barricades, bell, watchtower), camp (bandits), chest, fx
   entities/            # player, creature (wolf/draugr/bandit/guard AI) + wolfModel/draugrModel,

@@ -262,7 +262,7 @@ function openCampChest() {
 function readHornNote() {
   flags.hornNote = true;
   inventory.add('strangeNote');
-  hud.announce('The horn is gone!', 'A note lies in its place: "Dragonborn, we need to talk. Find me at the Sleeping Bear in Frosthollow. A friend."');
+  hud.announce('The horn is gone!', 'A note lies in its place: "Dragonborn, we need to talk. Find me at the Snoring Giant in Riverholt. A friend."');
   save();
 }
 
@@ -578,7 +578,7 @@ function victory() {
     enterLevel(valley, Math.PI);
     hud.showEnding(() => {
       hud.toast('Post-game: dragons still roam, dungeons refill, and a hidden word wall stirs in Bleakrock Barrow.');
-      hud.toast('Talk to Jarl Hrolf to begin New Game+.');
+      hud.toast('Talk to Jarl Balgrim to begin New Game+.');
     });
     save();
   }, 1.2), 4500);
@@ -598,14 +598,14 @@ function updateDayNight(dt, playing) {
   if (wasNight !== null && night !== wasNight && started) {
     if (player.level === valley) hud.toast(night ? 'Night falls over the valley' : 'Dawn breaks over the valley');
     if (night && !raidBlocker() && player.pos.length() < 70 && Math.random() < DN.nightRaidChance) {   // only near the village
-      hud.announce('Raiders under cover of night!', 'The bell rings in Frosthollow');
+      hud.announce('Raiders under cover of night!', 'The bell rings in Riverholt');
       startRaid();
     }
   }
   wasNight = night;
 }
 
-// ---- Raids on Frosthollow ----
+// ---- Raids on Riverholt ----
 let raidsWon = 0, shopClosedUntil = 0;
 const anyPlayerUp = () => player.alive || [...session.players.values()].some(p => p.body?.alive && p.body.level === valley);
 
@@ -640,7 +640,7 @@ events.on('raid', ({ data }) => {
   const lv = data.level ?? 1;
   if (data.phase === 'warning') {
     bellTime = 0;
-    hud.announce('Raiders approach Frosthollow!', `Raid level ${lv}. Defend the barricades! Wave 1 in ${RD.warning} seconds.`);
+    hud.announce('Raiders approach Riverholt!', `Raid level ${lv}. Defend the barricades! Wave 1 in ${RD.warning} seconds.`);
     audio.play('roar');
   } else if (data.phase === 'wave') {
     hud.announce(`Wave ${data.wave + 1} of ${RAID_WAVES}`, data.wave === RAID_WAVES - 1 ? 'The Draugr Warlord leads them!' : `${data.count} raiders incoming`);
@@ -650,7 +650,7 @@ events.on('raid', ({ data }) => {
   } else if (data.phase === 'won') {
     if (player.level === valley) {
       const gold = RD.reward.gold + RD.reward.goldPerLevel * (lv - 1);
-      hud.announce('Frosthollow stands!', `The raiders are beaten. Reward: ${gold} gold`);
+      hud.announce('Riverholt stands!', `The raiders are beaten. Reward: ${gold} gold`);
       inventory.addGold(gold);
       if (!flags.raidWon) { flags.raidWon = true; inventory.add(RD.reward.firstWinItem); }
     }
@@ -660,7 +660,7 @@ events.on('raid', ({ data }) => {
     save();
   } else if (data.phase === 'lost') {
     shopClosedUntil = Date.now() + RD.shopClosed * 1000;
-    hud.announce('Frosthollow has been plundered', 'Ingrid\'s shop burned. The village will rebuild. Ring the bell to try again.');
+    hud.announce('Riverholt has been plundered', 'Lukas\'s shop burned. The village will rebuild. Ring the bell to try again.');
     jobs.onRaid(false);
     save();
   }
@@ -673,7 +673,7 @@ function raidObjective() {
     : raid.phase === 'pause' ? `Wave ${raid.wave + 1} beaten. Next wave soon · barricades ${up}/${n}`
       : `Wave ${raid.wave + 1}/${RAID_WAVES}: ${left} raider${left === 1 ? '' : 's'} left · barricades ${up}/${n}`;
   const near = raid.nearestRaider(player.pos);
-  return { name: 'Raid on Frosthollow', text, target: { level: valley, pos: near ? near.pos : bell.pos } };
+  return { name: 'Raid on Riverholt', text, target: { level: valley, pos: near ? near.pos : bell.pos } };
 }
 
 // ---- Post-game & New Game+ ----

@@ -15,7 +15,7 @@ export const QUESTS = {
   arrival: {
     name: 'The Jarl\'s Summons', main: true,
     steps: [
-      { text: 'Speak with Jarl Hrolf in Frosthollow', done: w => w.flags.metJarl, target: jarl },
+      { text: 'Speak with Jarl Balgrim in Riverholt', done: w => w.flags.metJarl, target: jarl },
     ],
     reward: () => {},
   },
@@ -28,7 +28,7 @@ export const QUESTS = {
         target: w => ({ level: w.den, pos: w.alpha.pos }) },
       { text: 'Claim the den\'s treasure', done: w => w.chest('den.denTreasure').opened,
         target: w => ({ level: w.den, pos: w.chest('den.denTreasure').pos }) },
-      { text: 'Report to Jarl Hrolf', done: w => w.flags.reportedDen, target: jarl },
+      { text: 'Report to Jarl Balgrim', done: w => w.flags.reportedDen, target: jarl },
     ],
     reward: w => w.inventory.addGold(CONFIG.loot.questReward),
   },
@@ -41,7 +41,7 @@ export const QUESTS = {
         target: w => ({ level: w.barrow, pos: w.barrow.wordWall.pos }) },
       { text: 'Slay the dragon', done: w => w.dragon.state === 'dead',
         target: w => (w.dragon.active ? { level: w.valley, pos: w.dragon.pos } : null) },
-      { text: 'Report to Jarl Hrolf', done: w => w.flags.reportedDragon, target: jarl },
+      { text: 'Report to Jarl Balgrim', done: w => w.flags.reportedDragon, target: jarl },
     ],
     reward: w => w.inventory.addGold(CONFIG.loot.dragonReward),
   },
@@ -56,7 +56,7 @@ export const QUESTS = {
         target: w => ({ level: w.monastery, pos: w.monastery.center }) },
       { text: 'Retrieve the Horn of Jurgen Windcaller from Ustengrav', done: w => !!w.flags.hornNote,
         target: w => ({ level: w.ustengrav, pos: w.ustengrav.markers.horn }) },
-      { text: 'Meet your mysterious friend at the Sleeping Bear', done: w => !!w.flags.hornGot,
+      { text: 'Meet your mysterious friend at the Snoring Giant', done: w => !!w.flags.hornGot,
         target: w => ({ level: w.valley, pos: w.npc('innkeeper') }) },
       { text: 'Bring the Horn to the Greybeards', done: w => !!w.flags.hornDelivered, target: greybeard },
     ],
@@ -89,7 +89,7 @@ export const QUESTS = {
     steps: [
       { text: `Collect ${V.peltsWanted} wolf pelts`, done: w => w.inventory.count('wolfPelt') >= V.peltsWanted || w.flags.peltsGiven,
         target: () => null },
-      { text: 'Bring the pelts to Ulf the Hunter', done: w => w.flags.peltsGiven,
+      { text: 'Bring the pelts to Faendir the Hunter', done: w => w.flags.peltsGiven,
         target: w => ({ level: w.valley, pos: w.npc('hunter') }) },
     ],
     reward: w => w.inventory.addGold(V.rewards.pelts),
@@ -99,7 +99,7 @@ export const QUESTS = {
     steps: [
       { text: 'Find the Ancestor\'s Blade in Bleakrock Barrow', done: w => w.inventory.count('ancestorBlade') > 0 || w.flags.bladeGiven,
         target: w => ({ level: w.barrow, pos: w.chest('barrow.barrowCrypt').pos }) },
-      { text: 'Return the blade to Old Sven', done: w => w.flags.bladeGiven,
+      { text: 'Return the blade to Alvar', done: w => w.flags.bladeGiven,
         target: w => ({ level: w.valley, pos: w.npc('sven') }) },
     ],
     reward: w => { w.inventory.addGold(V.rewards.blade); w.inventory.add('healPotion', 2); },
@@ -111,7 +111,7 @@ export const QUESTS = {
         target: w => ({ level: w.valley, pos: w.camp.center }) },
       { text: 'Defeat the Bandit Chief', done: w => !!w.flags.chiefSlain,
         target: w => ({ level: w.valley, pos: w.banditChief.alive ? w.banditChief.pos : w.camp.center }) },
-      { text: 'Tell Ulf the camp is broken', done: w => !!w.flags.banditsReported,
+      { text: 'Tell Faendir the camp is broken', done: w => !!w.flags.banditsReported,
         target: w => ({ level: w.valley, pos: w.npc('hunter') }) },
     ],
     reward: w => { w.inventory.addGold(V.rewards.bandits); w.inventory.add('healPotion', 1); },
@@ -119,7 +119,7 @@ export const QUESTS = {
   jarlLetter: {
     name: 'A Letter for the Jarl',
     steps: [
-      { text: 'Deliver Bera\'s letter to Jarl Hrolf', done: w => w.flags.letterDelivered, target: jarl },
+      { text: 'Deliver Delphina\'s letter to Jarl Balgrim', done: w => w.flags.letterDelivered, target: jarl },
     ],
     reward: w => w.inventory.addGold(V.rewards.letter),
   },
@@ -128,7 +128,7 @@ export const QUESTS = {
     steps: [
       { text: 'Slay the Draugr Wight in Bleakrock Barrow', done: w => !w.wight.alive,
         target: w => ({ level: w.barrow, pos: w.wight.pos }) },
-      { text: 'Tell Bera the barrow is quiet', done: w => w.flags.barrowReported,
+      { text: 'Tell Delphina the barrow is quiet', done: w => w.flags.barrowReported,
         target: w => ({ level: w.valley, pos: w.npc('innkeeper') }) },
     ],
     reward: w => w.inventory.addGold(V.rewards.barrow),

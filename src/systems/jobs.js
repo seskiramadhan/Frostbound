@@ -33,12 +33,12 @@ export const JOB_TYPES = {
     ok: () => true,
   },
   raid: {
-    text: 'Defend Frosthollow from the raiders',
+    text: 'Defend Riverholt from the raiders',
     pitch: 'My scouts saw raiders gathering in the forest. They will hit us soon. Man the barricades!',
     ok: w => !w.raid.active,
   },
 };
-export const RETURN_TEXT = 'Return to Jarl Hrolf for your reward';
+export const RETURN_TEXT = 'Return to Jarl Balgrim for your reward';
 
 export class Jobs {
   constructor(world, hooks) {
@@ -111,7 +111,7 @@ export class Jobs {
 
   text() {
     const c = this.current;
-    if (!c) return 'Ask Jarl Hrolf for work';
+    if (!c) return 'Ask Jarl Balgrim for work';
     const base = JOB_TYPES[c.type].text;
     return c.type === 'wolves' ? `${base} (${c.progress}/${J.wolvesToHunt})` : base;
   }
