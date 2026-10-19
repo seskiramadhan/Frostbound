@@ -1,4 +1,4 @@
-// HUD: start overlay, health/stamina bars, enemy bar, hurt flash, death screen,
+// HUD: start overlay, health/stamina/magicka bars, stealth eye, enemy bar, hurt flash, death screen,
 // objective + quest marker, interact prompt, messages, fade, FPS counter.
 import * as THREE from 'three';
 import { CONFIG, IS_TOUCH } from '../config.js';
@@ -11,12 +11,19 @@ export class Hud {
     this.overlay = $('overlay');
     this.fpsEl = $('fps');
     $(IS_TOUCH ? 'help-desktop' : 'help-touch').remove();
-    if (!IS_TOUCH) for (const id of ['btn-jump', 'btn-interact', 'btn-bag', 'btn-shout', 'btn-bow']) $(id).remove();
+    if (!IS_TOUCH) for (const id of ['btn-jump', 'btn-interact', 'btn-bag', 'btn-shout', 'btn-bow', 'btn-crouch']) $(id).remove();
     if (IS_TOUCH) $('shout-ind').remove();
 
     this.hpBar = $('hp');
     this.stBar = $('st');
     this.stWrap = $('st-wrap');
+    this.mkBar = $('mk');
+    this.mkWrap = $('mk-wrap');
+    this.stealthEl = $('stealth');
+    this.stealthEye = $('stealth-eye');
+    this.stealthText = $('stealth-text');
+    this.crouchBtn = $('btn-crouch');
+    this.stealthKey = '';
     this.targetWrap = $('target');
     this.targetName = $('target-name');
     this.targetBar = $('target-hp');
@@ -151,11 +158,33 @@ export class Hud {
     this.shoutBtn.classList.toggle('ready', k >= 1);
   }
 
+  // Weapon button: shows what a tap switches to (sword -> bow -> fire -> sword).
   setBow(player) {
     if (!this.bowBtn) return;
-    this.bowBtn.style.display = player.hasBow ? 'block' : 'none';
-    const label = player.bowMode ? 'Sword' : 'Bow';
+    const modes = ['Sword', ...(player.hasBow ? ['Bow'] : []), ...(player.knowsFire ? ['Fire'] : [])];
+    this.bowBtn.style.display = modes.length > 1 ? 'block' : 'none';
+    const cur = player.bowMode ? 'Bow' : player.spellMode ? 'Fire' : 'Sword';
+    const label = modes[(modes.indexOf(cur) + 1) % modes.length];
     if (this.bowBtn.textContent !== label) this.bowBtn.textContent = label;
+  }
+
+  // Stealth eye while crouched: closed = hidden, opening = being noticed, red = detected.
+  setStealth(player, stealth) {
+    if (this.crouchBtn) {
+      this.crouchBtn.classList.toggle('on', player.crouched);
+      const l = player.crouched ? 'Stand' : 'Sneak';
+      if (this.crouchBtn.textContent !== l) this.crouchBtn.textContent = l;
+    }
+    const show = player.crouched && player.alive;
+    this.stealthEl.style.display = show ? 'block' : 'none';
+    if (!show) return;
+    const k = stealth.detected ? 'detected' : stealth.notice > 0.05 ? 'caution' : 'hidden';
+    if (k !== this.stealthKey) {
+      this.stealthKey = k;
+      this.stealthEl.className = k;
+      this.stealthText.textContent = { hidden: 'Hidden', caution: 'Caution', detected: 'Detected' }[k];
+    }
+    this.stealthEye.style.setProperty('--open', (0.15 + 0.85 * stealth.notice).toFixed(2));
   }
 
   setSlow(on) { this.slowEl.classList.toggle('on', on); }
@@ -193,6 +222,11 @@ export class Hud {
     this.hpBar.style.transform = `scaleX(${player.hp / player.maxHp})`;
     this.stBar.style.transform = `scaleX(${player.stamina / player.maxStamina})`;
     this.stWrap.classList.toggle('full', player.stamina >= player.maxStamina);
+    this.mkWrap.style.display = player.knowsFire ? 'block' : 'none';
+    if (player.knowsFire) {
+      this.mkBar.style.transform = `scaleX(${player.magicka / player.maxMagicka})`;
+      this.mkWrap.classList.toggle('full', player.magicka >= player.maxMagicka);
+    }
 
     if (this.target) {
       this.targetTime -= dt;

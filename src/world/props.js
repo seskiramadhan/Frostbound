@@ -10,7 +10,7 @@ export function mergeColored(parts) {
   const pos = [], nor = [], col = [];
   const c = new THREE.Color();
   for (const { geo, color } of parts) {
-    const g = geo.toNonIndexed();
+    const g = geo.index ? geo.toNonIndexed() : geo.clone();
     g.computeVertexNormals();
     c.setHex(color);
     const pa = g.attributes.position.array, na = g.attributes.normal.array;

@@ -200,9 +200,9 @@ export class Session {
         // Validate: the target exists, is alive, is an enemy on the guest's level, and is in reach
         const body = this.players.get(from)?.body, t = g.entities.get(m.id);
         if (!body?.alive || !t?.alive || t.team === 'player' || t.level !== body.level) break;
-        const d = Number(m.d), src = m.s === 'arrow' ? 'arrow' : m.s === 'shout' ? 'shout' : 'melee';
+        const d = Number(m.d), src = ['arrow', 'shout', 'fire'].includes(m.s) ? m.s : 'melee';
         const reach = src === 'melee' ? 7 : 90;
-        if (!(d > 0 && d < 300)) break;
+        if (!(d > 0 && d < 600)) break;   // a maxed sneak attack can hit hard
         if (Math.hypot(t.pos.x - body.pos.x, t.pos.z - body.pos.z) > reach + t.radius + (t.flying ? t.airRadius : 0)) break;
         g.combat.applyHit(body, t, d, src);
         break;

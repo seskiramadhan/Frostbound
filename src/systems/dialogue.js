@@ -62,7 +62,7 @@ function jarl(c) {
 
 function merchant(c) {
   return {
-    text: 'Furs, steel, potions. I buy what you can carry and sell what you can afford.',
+    text: 'Furs, steel, potions, even a spell tome if you have the head for magic. I buy what you can carry and sell what you can afford.',
     options: [{ label: 'Let me trade.', run: () => { c.trade(); return true; } }, bye],
   };
 }

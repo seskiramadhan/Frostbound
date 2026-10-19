@@ -36,6 +36,14 @@ export class Shouts {
 
   select(id) { if (this.known.has(id)) this.selected = id; }
 
+  // Switch to the next known shout (in SHOUT_IDS order). Returns the new id or null.
+  cycle() {
+    const known = SHOUT_IDS.filter(id => this.known.has(id));
+    if (known.length < 2) return null;
+    this.selected = known[(known.indexOf(this.selected) + 1) % known.length];
+    return this.selected;
+  }
+
   // Returns true if a shout went off.
   use(player) {
     if (!this.ready || !player.alive) return false;

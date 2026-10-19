@@ -1,5 +1,6 @@
 // Keyboard/mouse (pointer lock) and touch (left joystick, right-side gestures, buttons).
-// Produces one command object per fixed tick: { move, run, attack, block, draw, jump, interact, shout, toggleBow }.
+// Produces one command object per fixed tick: { move, run, attack, block, draw, jump, interact, shout, toggleBow,
+// crouch, cycleShout }. Holding the Shout button switches shouts instead of shouting.
 // The menu key/button calls onMenu() directly (it works while paused).
 import { CONFIG, IS_TOUCH } from './config.js';
 
@@ -12,7 +13,7 @@ export class Input {
     this.joyKnob = joyKnob;
 
     // move: x = strafe right, y = forward, length 0..1
-    this.cmd = { move: { x: 0, y: 0 }, run: false, attack: false, block: false, draw: false, jump: false, interact: false, shout: false, toggleBow: false };
+    this.cmd = { move: { x: 0, y: 0 }, run: false, attack: false, block: false, draw: false, jump: false, interact: false, shout: false, toggleBow: false, crouch: false, cycleShout: false };
     this.lookDX = 0;              // accumulated look deltas (radians), consumed by camera
     this.lookDY = 0;
 
@@ -28,6 +29,8 @@ export class Input {
     this.interactPressed = false;
     this.shoutPressed = false;
     this.bowPressed = false;
+    this.crouchPressed = false;
+    this.cyclePressed = false;
     this.mouseDraw = false;      // LMB held (draws the bow in bow mode)
 
     this.#bindKeyboardMouse();
@@ -51,6 +54,8 @@ export class Input {
     cmd.interact = this.interactPressed;
     cmd.shout = this.shoutPressed;
     cmd.toggleBow = this.bowPressed;
+    cmd.crouch = this.crouchPressed;
+    cmd.cycleShout = this.cyclePressed;
     cmd.draw = this.mouseDraw || this.rightTouch?.mode === 'block';
     cmd.block = this.mouseBlock || this.rightTouch?.mode === 'block';
 
@@ -59,6 +64,8 @@ export class Input {
     this.interactPressed = false;
     this.shoutPressed = false;
     this.bowPressed = false;
+    this.crouchPressed = false;
+    this.cyclePressed = false;
     return cmd;
   }
 
@@ -102,6 +109,8 @@ export class Input {
       if (e.code === 'KeyE') this.interactPressed = true;
       if (e.code === 'KeyQ') this.shoutPressed = true;
       if (e.code === 'KeyB') this.bowPressed = true;
+      if (e.code === 'KeyC') this.crouchPressed = true;
+      if (e.code === 'KeyR') this.cyclePressed = true;
     });
     addEventListener('keyup', e => { this.keys[e.code] = false; });
     addEventListener('blur', () => { this.keys = Object.create(null); this.mouseBlock = false; this.mouseDraw = false; });
@@ -135,8 +144,22 @@ export class Input {
     press(buttons.jump, () => { this.jumpPressed = true; });
     press(buttons.interact, () => { this.interactPressed = true; });
     press(buttons.menu, () => this.onMenu?.());
-    press(buttons.shout, () => { this.shoutPressed = true; });
     press(buttons.bow, () => { this.bowPressed = true; });
+    press(buttons.crouch, () => { this.crouchPressed = true; });
+    // Shout: tap = shout, hold = switch to the next known shout
+    let shoutTimer = null, shoutHeld = false;
+    press(buttons.shout, () => {
+      shoutHeld = false;
+      clearTimeout(shoutTimer);
+      shoutTimer = setTimeout(() => { shoutHeld = true; this.cyclePressed = true; }, C.shoutHold * 1000);
+    });
+    const shoutUp = e => {
+      e.preventDefault(); e.stopPropagation();
+      clearTimeout(shoutTimer);
+      if (!shoutHeld && e.type === 'touchend') this.shoutPressed = true;
+    };
+    buttons.shout.addEventListener('touchend', shoutUp, opts);
+    buttons.shout.addEventListener('touchcancel', shoutUp, opts);
 
     el.addEventListener('touchstart', e => {
       e.preventDefault();

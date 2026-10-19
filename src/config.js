@@ -87,6 +87,9 @@ export const CONFIG = {
   stats: {
     maxHealth: 100,
     maxStamina: 100,
+    maxMagicka: 100,
+    magickaRegen: 7,       // per second
+    magickaRegenDelay: 1.2,
     staminaRegen: 28,      // per second
     staminaRegenDelay: 0.8,// seconds after spending before regen starts
     blockRegenMul: 0.4,    // regen multiplier while blocking
@@ -265,6 +268,7 @@ export const CONFIG = {
     healPotion:  { name: 'Potion of Healing', type: 'potion', heal: 70, value: 35 },
     ironArmor:   { name: 'Iron Armor', type: 'armor', armor: 30, value: 120, color: 0x7d838c },
     longbow:     { name: 'Hunter\'s Longbow', type: 'bow', damage: 24, value: 110 },
+    fireTome:    { name: 'Spell Tome: Fire', type: 'tome', spell: 'fire', value: 40 },
     ancestorBlade: { name: 'Ancestor\'s Blade', type: 'quest', value: 0 },
     jarlLetter:  { name: 'Sealed Letter', type: 'quest', value: 0 },
     wolfPelt:    { name: 'Wolf Pelt', type: 'misc', value: 8 },
@@ -278,6 +282,10 @@ export const CONFIG = {
     denTreasure: { items: { steelSword: 1, minorPotion: 2 }, gold: 60 },
     barrowHall:  { items: { huntingBow: 1, minorPotion: 2 }, gold: 30 },
     barrowCrypt: { items: { ancestorBlade: 1 }, gold: 20 },
+    // Village strongboxes (stealing)
+    jarlCoffer:  { items: { healPotion: 1 }, gold: 70 },
+    ingridBox:   { items: { minorPotion: 2 }, gold: 45 },
+    beraChest:   { items: { minorPotion: 1 }, gold: 30 },
     wolfDrop: 'wolfPelt',
     alphaDrop: 'alphaPelt',
     questReward: 50,       // gold for finishing the first quest
@@ -294,6 +302,45 @@ export const CONFIG = {
       perk: { name: 'Shield Wall', desc: 'Blocking costs half stamina', staminaMul: 0.5 } },
     archery: { name: 'Archery', xpPerHit: 1.2, damagePerLevel: 0.06,
       perk: { name: 'Overdraw', desc: 'Bow damage +25%', damageMul: 1.25 } },
+    sneak: { name: 'Sneak', xpPerSecond: 0.25, xpPerSneakAttack: 2, xpPerSteal: 3, noticePerLevel: 0.05,
+      perk: { name: 'Assassin\'s Strike', desc: 'Sneak attacks deal double damage', attackMul: 2 } },
+    destruction: { name: 'Destruction', xpPerHit: 0.5, damagePerLevel: 0.06,
+      perk: { name: 'Destruction Adept', desc: 'Fire spells cost half magicka', costMul: 0.5 } },
+  },
+
+  // Crouch + stealth. Enemies notice a sneaking player gradually instead of at once.
+  sneak: {
+    speedMul: 0.55,        // walk speed while crouched (no running)
+    radiusMul: 0.55,       // detect radius x this while crouched
+    noticeRate: 0.5,       // awareness per second at the edge of the radius (faster when closer)
+    movingMul: 1.5,        // moving while crouched is noisier...
+    stillMul: 0.5,         // ...than keeping still
+    behindMul: 0.25,       // much harder to notice you from behind
+    darkMul: 0.75,         // dungeons are dim
+    forget: 0.35,          // awareness lost per second when out of range
+    touchRadius: 1.6,      // this close they always notice
+    attackMul: { melee: 3, arrow: 2, fire: 1.5 },
+  },
+
+  // Stealing from village strongboxes
+  steal: {
+    seeRadius: 14,         // a standing thief is seen this far
+    seeRadiusCrouched: 6,  // a sneaking thief only this close, and only if the villager faces you
+    viewArc: 1.2,          // half-angle a villager can see (radians)
+    fine: 40,
+    refill: 900,           // seconds before a strongbox has something in it again
+    boxes: [               // [lootKey, owner npc id, x, z, facing]
+      ['jarlCoffer', 'jarl', -6, -13.2, 0],
+      ['ingridBox', 'merchant', 9.2, -8.9, 0],
+      ['beraChest', 'innkeeper', -9, -9.4, 0],
+    ],
+  },
+
+  // Destruction magic (fire): tap = Firebolt, hold = Flames
+  magic: {
+    firebolt: { cost: 22, damage: 24, speed: 26, radius: 1.6, life: 2.5 },
+    flames: { costPerSec: 16, damagePerSec: 22, range: 6, arc: 0.5, every: 0.2 },
+    castTime: 0.35,        // firebolt cast animation
   },
 
   // Shouts: learned at word walls (and from dragon souls). Cooldowns in seconds.
@@ -358,7 +405,7 @@ export const CONFIG = {
     sellRate: 1,           // merchant pays value x sellRate
     stock: [               // merchant: [item, price]
       ['minorPotion', 30], ['healPotion', 70], ['steelSword', 160], ['hideArmor', 90],
-      ['ironArmor', 260], ['huntingBow', 110], ['longbow', 240],
+      ['ironArmor', 260], ['huntingBow', 110], ['longbow', 240], ['fireTome', 80],
     ],
     rewards: { pelts: 60, blade: 120, letter: 40, barrow: 100, report: 75 },
     peltsWanted: 3,
@@ -461,5 +508,6 @@ export const CONFIG = {
     // Right-side touch gestures: tap = attack, hold = block, drag = camera
     tapSlop: 14,           // px a tap/hold may wander
     holdTime: 0.3,         // seconds still before it counts as block
+    shoutHold: 0.45,       // hold the Shout button this long to switch shouts instead
   },
 };
