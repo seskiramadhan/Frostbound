@@ -13,7 +13,10 @@ end of every piece of work (what's done, what's next).
 - **Language:** JavaScript (ES modules), no TypeScript, no build step required
 - **Rendering:** Three.js (pin exact version, load from cdnjs or a local copy)
 - **Art:** low-poly, procedural geometry + flat/vertex colors. **No texture files, no model files.**
-- **Audio:** procedural via Web Audio API, no audio files
+- **Audio:** sound effects procedural via Web Audio API (no SFX files). Music: a few
+  tracks in `audio/music/` that are **free to publish** (CC0, or CC-BY with credit in
+  `audio/music/README.md`). Personal tracks the user may not publish (e.g. game OSTs)
+  go only in `audio/music/local/`, which is git-ignored. Never commit copyrighted music.
 - **Saving:** localStorage (wrap every read/write in try/catch)
 - **Hosting:** static, $0 (GitHub Pages or Vercel)
 - **No game engines** (no Phaser, Babylon, Unity export)

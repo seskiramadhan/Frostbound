@@ -84,6 +84,13 @@ HP +30%/level, damage +15%/level, names from `CONFIG.hunt.names`; everyone prese
 - Lint: `eslint` is installed globally; use a flat config with browser globals (window, document,
   localStorage, navigator, performance, requestAnimationFrame, setTimeout, location, …).
 
+## Music (for round 3 / 5d)
+- User picked CC0 tracks: "Boss Battle Music" (SubspaceAudio) -> `audio/music/boss.mp3`,
+  "Medieval: Exploration" (RandomMind) -> `audio/music/explore.mp3`. User will push them.
+- User's Skyrim tracks (Dragonborn = boss, Far Horizons = explore) are personal only:
+  `audio/music/local/` (git-ignored). Code should prefer local/ files when present.
+- Plan: explore music everywhere, boss music when a dragon / the World-Eater is active, crossfade.
+
 ## Open questions for the user
 - Quick shout switching: want it? (see 2)
 - After playtesting: N3 co-op dragon hunts next, or Phase 5a village?
