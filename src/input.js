@@ -91,6 +91,7 @@ export class Input {
 
   #bindKeyboardMouse() {
     addEventListener('keydown', e => {
+      if (e.target instanceof HTMLInputElement) return;   // typing a name / room code
       this.keys[e.code] = true;
       if (e.code === 'Space' || e.code === 'Tab') e.preventDefault();
       if (e.repeat) return;
