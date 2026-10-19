@@ -1,4 +1,5 @@
 // Instanced pine trees and rocks scattered over the valley (2 draw calls total).
+// Rocks are standable platforms (jump onto them); trees are colliders.
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { mulberry32 } from './noise.js';
@@ -43,7 +44,7 @@ function pineGeometry() {
 
 export function buildProps(terrain) {
   const rand = mulberry32(P.seed);
-  const colliders = [];
+  const colliders = [], platforms = [];
   const group = new THREE.Group();
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), v = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0), e = new THREE.Euler();
@@ -81,6 +82,7 @@ export function buildProps(terrain) {
 
   // Rocks
   const rockGeo = new THREE.DodecahedronGeometry(1, 0);
+  const rv = rockGeo.attributes.position, corner = new THREE.Vector3();
   const rocks = new THREE.InstancedMesh(rockGeo, new THREE.MeshLambertMaterial({ color: 0x7c8088, flatShading: true }), P.rocks);
   let nr = 0;
   for (let n = 0; n < P.rocks; n++) {
@@ -91,12 +93,14 @@ export function buildProps(terrain) {
     s.set(sc * (0.8 + rand() * 0.6), sc * (0.5 + rand() * 0.4), sc * (0.8 + rand() * 0.6));
     m.compose(v.set(p.x, p.h + s.y * 0.3, p.z), q, s);
     rocks.setMatrixAt(nr++, m);
-    colliders.push({ x: p.x, z: p.z, r: Math.max(s.x, s.z) * P.rockCollideScale });
+    let top = -Infinity;                       // the rock's real top, so you stand on it, not in it
+    for (let i = 0; i < rv.count; i++) top = Math.max(top, corner.fromBufferAttribute(rv, i).applyMatrix4(m).y);
+    platforms.push({ x: p.x, z: p.z, r: Math.max(s.x, s.z) * P.rockCollideScale, y: top - P.rockSink });
   }
   rocks.count = nr;
   rocks.instanceMatrix.needsUpdate = true;
   rocks.computeBoundingSphere();
   group.add(rocks);
 
-  return { group, colliders };
+  return { group, colliders, platforms };
 }

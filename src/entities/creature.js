@@ -123,7 +123,7 @@ export class Creature {
       const ahead = Math.abs(Math.atan2(Math.sin(Math.atan2(e.pos.x - this.pos.x, e.pos.z - this.pos.z) - this.facing),
         Math.cos(Math.atan2(e.pos.x - this.pos.x, e.pos.z - this.pos.z) - this.facing))) < 1.3;
       const rate = SN.noticeRate * (0.3 + 2 * (1 - dist / R)) * ((e.speed ?? 0) > 0.5 ? SN.movingMul : SN.stillMul)
-        * (ahead ? 1 : SN.behindMul) * (this.level.ceiling ? SN.darkMul : 1) * (e.sneakMul ?? 1);
+        * (ahead ? 1 : SN.behindMul) * (this.level.ceiling || this.level.night ? SN.darkMul : 1) * (e.sneakMul ?? 1);
       this.notice = Math.min(1, this.notice + rate * dt);
     }
     return this.notice >= 1;

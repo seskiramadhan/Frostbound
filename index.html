@@ -34,6 +34,10 @@
   .panel td { padding: 3px 10px; }
   .panel td:first-child { text-align: right; color: #b9c9d6; }
 
+  #clock {
+    position: fixed; top: calc(max(8px, env(safe-area-inset-top)) + 16px); right: 10px; z-index: 5;
+    font: 12px Georgia, serif; color: #f2efe6; opacity: 0.75; pointer-events: none; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  }
   #fps {
     position: fixed; top: max(8px, env(safe-area-inset-top)); right: 10px; z-index: 5;
     font: 12px ui-monospace, monospace; color: #1d2630; opacity: 0.6; pointer-events: none;
@@ -318,6 +322,7 @@
   </div>
 </div>
 <div id="fps"></div>
+<div id="clock"></div>
 <div id="joy"><div id="joy-knob"></div></div>
 <div id="bars">
   <div class="bar" id="hp-wrap"><i id="hp"></i></div>

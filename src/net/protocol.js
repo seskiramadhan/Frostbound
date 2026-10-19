@@ -8,7 +8,7 @@
 // host -> guest   welcome { id, players: [{ id, name, look }] }   everyone already here (incl. host)
 //                 reject  { msg }                  room full / different game version
 //                 hurt    { d, b, x, z }           an enemy hit you: raw damage, blocked?, from where
-//                 world   { list: [Enemy], slow }  every enemy's state, sendRate per second
+//                 world   { list: [Enemy], slow, tod }  every enemy's state + time of day, sendRate per second
 //                 ev      { n, id?, killer?, data? }  one-off world events (death, dragonRoar, dragonDowned, dragonDead, huntStart, bossPhase2, raid, enemyShot)
 //                 joined  { id, name, look }
 //                 left    { id }
@@ -21,7 +21,7 @@
 //   flags: 1 = alive, 2 = visible
 import * as THREE from 'three';
 
-export const VERSION = 8;
+export const VERSION = 9;
 
 export const MSG = {
   HELLO: 'hello', POSE: 'pose', LOOK: 'look', HIT: 'hit', SHOUT: 'shout',

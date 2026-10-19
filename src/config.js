@@ -61,7 +61,19 @@ export const CONFIG = {
     clearRadius: 26,       // keep the centre clear
     clearings: [[-72, -32, 13]],  // other open spots: [x, z, radius] (bandit camp)
     treeCollideRadius: 0.6,
-    rockCollideScale: 0.8,
+    rockCollideScale: 0.8,    // standable radius of a rock (x its size)
+    rockSink: 0.12,           // you stand this far below a rock's highest point (it's rounded)
+  },
+
+  // Day and night in the valley. Time runs 0..1 (0 = midnight, 0.25 dawn, 0.5 noon, 0.75 dusk).
+  dayNight: {
+    length: 720,             // seconds for a whole day
+    start: 0.3,              // a new game starts in the morning
+    morning: 0.27,           // resting at the inn sleeps until this time
+    nightRaidChance: 0.5,    // at nightfall, raiders may come (once you can be raided)
+    night: { fog: 0x1a2230, sky: 0x2a3a58, ground: 0x10141a, hemi: 0.55, moon: 0x8fa4d0, moonI: 0.35 },
+    dusk: 0xd89a70,          // warm tint at sunrise / sunset
+    torchAtNight: 9,         // the player's carried light outdoors at night
   },
 
   snow: {

@@ -22,7 +22,7 @@ export class Terrain {
         this.heights[j * n + i] = this.#shape(-this.half + i * this.cell, -this.half + j * this.cell);
       }
     }
-    this.platforms = [];
+    this.platGrid = new Map();   // standable tops (rocks, watchtower), bucketed by 16 m cells
     this.mesh = this.#buildMesh();
     this.name = 'valley';
     this.colliders = [];   // trees, rocks, cave mouth (filled in by props)
@@ -66,12 +66,30 @@ export class Terrain {
     return this.heights[j * n + i];
   }
 
-  // Height you stand on: the ground, or the top of a platform (watchtower) when over one.
-  // platforms: [{ x, z, hw, hd, y }] (y = absolute top height).
+  // A standable top: box { x, z, hw, hd, y } or circle { x, z, r, y } (y = absolute top height).
+  // Walking into one is blocked like a steep slope; you can jump (or climb) onto it.
+  addPlatform(p) {
+    const ex = p.r ?? p.hw, ez = p.r ?? p.hd;
+    for (let i = Math.floor((p.x - ex) / 16); i <= Math.floor((p.x + ex) / 16); i++) {
+      for (let j = Math.floor((p.z - ez) / 16); j <= Math.floor((p.z + ez) / 16); j++) {
+        const k = i * 4096 + j;
+        if (!this.platGrid.has(k)) this.platGrid.set(k, []);
+        this.platGrid.get(k).push(p);
+      }
+    }
+  }
+
+  // Height you stand on: the ground, or the top of a platform when over one.
   heightAt(x, z) {
-    const g = this.groundAt(x, z);
-    for (const p of this.platforms) if (Math.abs(x - p.x) < p.hw && Math.abs(z - p.z) < p.hd && p.y > g) return p.y;
-    return g;
+    let h = this.groundAt(x, z);
+    const cell = this.platGrid.get(Math.floor(x / 16) * 4096 + Math.floor(z / 16));
+    if (cell) {
+      for (const p of cell) {
+        const inside = p.r !== undefined ? (x - p.x) ** 2 + (z - p.z) ** 2 < p.r * p.r : Math.abs(x - p.x) < p.hw && Math.abs(z - p.z) < p.hd;
+        if (inside && p.y > h) h = p.y;
+      }
+    }
+    return h;
   }
 
   // Height on the rendered surface. Cell split along (i, j+1)-(i+1, j).

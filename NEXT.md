@@ -26,7 +26,8 @@ https://seskiramadhan.github.io/Frostbound/
 | Update button | Bag ↻ re-downloads every game file past the cache; "New version available" notice; build 2 | #15 |
 | Round 5 | Raids on Frosthollow + the Jarl's requests (build 3) | #17 |
 | Round 6 | Bandits (camp, archers, chief, raid wave) + enemy levels (build 4) | #18 (branch `bandits`) |
-| Round 7 | Main story: the Greybeards, The Way of the Voice, Ustengrav (build 5) | round-7 PR (branch `greybeards`, on #18) |
+| Round 7 | Main story: the Greybeards, The Way of the Voice, Ustengrav (build 5) | #19 (branch `greybeards`, on #18) |
+| Round 8 | Day/night cycle (night raids) + rocks you can stand on (build 6) | round-8 PR (branch `daynight`, on #19) |
 
 **Story today (with round 2):** start in Frosthollow → The Jarl's Summons (talk to Jarl Hrolf) →
 The Howling Den (den, alpha, treasure, report to Jarl) → Dragon Rising (barrow, FUS word wall, dragon,
@@ -64,6 +65,18 @@ keeping the save. The start screen shows "New version available" when `version.j
 higher build than `src/version.js` `BUILD` (checked on load and every 10 min), and shows
 "Build N" at the bottom. **Bump both numbers in every PR.** Build 2 = this feature.
 Devices still on build 1 or older need one last manual refresh/cache clear to get the button.
+
+**Round 8 (built, awaiting test): day/night + standable rocks**
+- **Day/night** in the valley (`CONFIG.dayNight`, `applyDayNight` in `world/environment.js`): a day lasts
+  12 minutes; light, fog and sky blend to night (moonlight, dark blue fog, the player's lantern on) with a
+  warm tint at sunrise/sunset. "☀ Day / ☾ Night" in the corner; toasts at nightfall and dawn.
+  At nightfall, if you're near the village and can be raided, there's a 50% chance of a **night raid**.
+  Sneaking is easier at night (same bonus as dark dungeons). Renting a room at night sleeps until
+  morning. Time of day is saved; in co-op the host's clock drives everyone (protocol v9, `tod` in WORLD).
+- **Rocks you can stand on:** valley rocks are no longer push-out circles but standable platforms
+  (`terrain.addPlatform`, bucketed in a 16 m grid; the watchtower uses the same). Walking into a rock is
+  blocked like a steep slope; jump onto the low ones (jump height about 1 m). Tops come from each rock's
+  real shape.
 
 **Round 7 (built, awaiting test): the Greybeards (main story)**
 - New main quest **The Way of the Voice** between Dragon Rising and The World-Eater (old saves already on the
@@ -128,7 +141,7 @@ Every PR: bump the build number, keep old saves loading, and put a short "What's
 
 **Dropped by the user:** "The Raiders' Nest" fort siege. (Bandits came back in round 6.)
 **Maybe later:** blacksmith + dragon bone gear, legendary dragon, buying a house, legendary skills,
-day/night, standable rocks, a Fire button / tutorial, a second region, co-op N4 relay.
+a Fire button / tutorial, a second region, co-op N4 relay. (Day/night and standable rocks: round 8.)
 **Naming note:** some names are taken straight from Skyrim (shout words, "Unrelenting Force", "Dragonborn",
 "World-Eater"; "Bleakrock Barrow" is close to "Bleak Falls Barrow"). That's fine for a personal fan game.
 Rename them if the user ever wants to share it widely.
