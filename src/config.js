@@ -592,13 +592,14 @@ export const CONFIG = {
   camera: {
     distance: 6,
     height: 1.6,           // look-at height above player feet
-    minPitch: -0.35,
+    minPitch: -0.75,       // far enough below the player to look up at the sky and dragons
     maxPitch: 1.1,
     startPitch: 0.3,
     follow: 10,            // position smoothing
     groundClearance: 0.6,
     minDistance: 1.2,      // closest it gets when a wall is in the way
     ceilingClearance: 0.5,
+    aimBlend: 1.5,         // metres of ground push over which the view switches to 'looking up'
   },
 
   input: {

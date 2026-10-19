@@ -1,7 +1,7 @@
 # NEXT.md — where Frostbound stands and what's pending
 
 Read this first in a new session, then `CLAUDE.md` for the rules.
-Last updated: 2026-10-19. **Live: build 6** (everything below is merged and deployed).
+Last updated: 2026-10-19. **Live: build 6**; build 7 (camera look-up) is in a PR.
 **Next:** the user playtests build 6 (PC + iPad, solo and co-op) and sends notes; fix those in one PR.
 
 ## Live now
@@ -18,6 +18,7 @@ https://seskiramadhan.github.io/Frostbound/ (merging into `master` deploys; play
 | Round 6 | Bandits (camp, archers, chief, raid wave) + enemy levels | #18 |
 | Round 7 | Main story: the Greybeards, The Way of the Voice, Ustengrav | #19 |
 | Round 8 | Day/night (night raids) + rocks you can stand on | #20 |
+| Camera | Look up freely (sky, dragons overhead): the camera keeps its angle when the ground pushes it up (build 7) | camera PR (branch `camera-look`, on #21) |
 
 ## The game today (build 6)
 

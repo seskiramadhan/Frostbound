@@ -1,4 +1,6 @@
 // Third-person orbit camera that follows the player and stays above the terrain.
+// Looking up: when the camera is pushed up by the ground (or down by a ceiling) it keeps the
+// angle it would have had, so you see the sky and dragons overhead instead of your own head.
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 
@@ -12,6 +14,8 @@ export class ThirdPersonCamera {
     this.pitch = C.startPitch;
     this.target = new THREE.Vector3();
     this.desired = new THREE.Vector3();
+    this.aim = new THREE.Vector3();
+    this.lookAt = new THREE.Vector3();
     this.snapped = false;
     this.trauma = 0;
   }
@@ -49,6 +53,8 @@ export class ThirdPersonCamera {
       k = Math.max(k, C.minDistance / C.distance);
       d.lerpVectors(t, d, k);
     }
+    this.aim.subVectors(t, d);                     // the view direction before ground/ceiling push
+    const freeY = d.y;
     const floor = lv.heightAt(d.x, d.z) + C.groundClearance;
     if (d.y < floor) d.y = floor;
     if (lv.ceiling !== undefined) d.y = Math.min(d.y, lv.ceiling - C.ceilingClearance);
@@ -56,7 +62,10 @@ export class ThirdPersonCamera {
     const cam = this.camera;
     if (!this.snapped) { cam.position.copy(this.desired); this.snapped = true; }
     else cam.position.lerp(this.desired, 1 - Math.exp(-C.follow * dt));
-    cam.lookAt(this.target);
+    // Pushed by the ground/ceiling: blend from looking at the player to keeping the free angle
+    const pushed = Math.min(1, Math.abs(d.y - freeY) / C.aimBlend);
+    this.lookAt.copy(cam.position).add(this.aim).lerp(this.target, 1 - pushed);
+    cam.lookAt(this.lookAt);
 
     if (this.trauma > 0) {
       const a = this.trauma * this.trauma;
