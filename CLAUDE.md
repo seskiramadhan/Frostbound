@@ -121,3 +121,11 @@ src/
 - Small focused modules, no giant single file
 - Fixed timestep for game logic, render every frame
 - All tunable numbers (damage, speeds, cooldowns, XP curves) in one `config.js`
+
+## Git workflow
+- **Always open a pull request into `master`** after pushing work to a branch.
+  Don't ask first: the user wants a PR every time. If a PR from that branch
+  is already open, push to it instead of opening a second one.
+- The user merges PRs. Merging into `master` triggers the GitHub Pages deploy
+  (https://seskiramadhan.github.io/Frostbound/), so unmerged work is not live.
+- Give the user the PR link at the end of every change.
