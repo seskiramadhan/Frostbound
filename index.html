@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#c8d4de">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Frostbound</title>
+<style>
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #c8d4de;
+    font-family: Georgia, 'Times New Roman', serif; color: #f2efe6;
+    touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  }
+  canvas { display: block; touch-action: none; }
+
+  #overlay {
+    position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, rgba(20, 28, 36, 0.55), rgba(10, 14, 18, 0.85));
+    cursor: pointer; padding: 16px; box-sizing: border-box;
+  }
+  .panel { text-align: center; max-width: 440px; }
+  .panel h1 {
+    margin: 0; font-size: clamp(40px, 11vw, 64px); font-weight: 400; letter-spacing: 0.18em;
+    text-transform: uppercase; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+  }
+  .panel .sub { margin: 4px 0 26px; font-style: italic; opacity: 0.75; }
+  .panel .cta {
+    display: inline-block; padding: 10px 26px; margin-bottom: 26px;
+    border: 1px solid rgba(242, 239, 230, 0.6); letter-spacing: 0.2em; text-transform: uppercase; font-size: 14px;
+  }
+  .panel table { margin: 0 auto; border-collapse: collapse; font-size: 14px; opacity: 0.85; }
+  .panel td { padding: 3px 10px; }
+  .panel td:first-child { text-align: right; color: #b9c9d6; }
+
+  #fps {
+    position: fixed; top: max(8px, env(safe-area-inset-top)); right: 10px; z-index: 5;
+    font: 12px ui-monospace, monospace; color: #1d2630; opacity: 0.6; pointer-events: none;
+  }
+
+  /* Floating joystick (appears where the left thumb lands) */
+  #joy {
+    position: fixed; left: 0; top: 0; width: 110px; height: 110px; z-index: 5; display: none; pointer-events: none;
+    border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.45); background: rgba(255, 255, 255, 0.12);
+  }
+  #joy-knob {
+    position: absolute; left: 30px; top: 30px; width: 50px; height: 50px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.55);
+  }
+</style>
+</head>
+<body>
+<div id="overlay">
+  <div class="panel">
+    <h1>Frostbound</h1>
+    <div class="sub">The valley awaits.</div>
+    <div class="cta" id="cta">Begin</div>
+    <table id="help-desktop">
+      <tr><td>W A S D</td><td>Move</td></tr>
+      <tr><td>Shift</td><td>Run</td></tr>
+      <tr><td>Mouse</td><td>Look</td></tr>
+      <tr><td>Esc</td><td>Pause</td></tr>
+    </table>
+    <table id="help-touch">
+      <tr><td>Left thumb</td><td>Move (push far to run)</td></tr>
+      <tr><td>Right thumb</td><td>Drag to look</td></tr>
+    </table>
+  </div>
+</div>
+<div id="fps"></div>
+<div id="joy"><div id="joy-knob"></div></div>
+
+<script>
+  // ES modules are blocked on file:// (CORS), so explain how to run it instead of failing silently.
+  if (location.protocol === 'file:') {
+    document.querySelector('#overlay .panel').innerHTML =
+      '<h1>Frostbound</h1>' +
+      '<div class="sub">Must be served over http, not opened as a file.</div>' +
+      '<table><tr><td>Windows</td><td>Double-click <b>start.bat</b></td></tr>' +
+      '<tr><td>Any OS</td><td><code>python -m http.server 8000</code></td></tr>' +
+      '<tr><td>Then open</td><td>http://localhost:8000</td></tr></table>';
+  }
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.170.0/three.module.min.js"
+  }
+}
+</script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
