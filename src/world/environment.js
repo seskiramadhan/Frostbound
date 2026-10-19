@@ -37,13 +37,44 @@ export function applyAmbience(env, kind, sunny = false) {
     env.hemi.groundColor.setHex(SU.light.hemiGround);
     env.hemi.intensity = SU.light.hemiIntensity;
     env.sun.intensity = SU.light.sun;
-  } else {
+    env.sun.color.setHex(L.sunColor);
+  } else {                                 // valley: the day/night cycle takes over every frame
+    env.sun.color.setHex(L.sunColor);
     env.hemi.color.setHex(sunny ? VI.light.skyColor : L.skyColor);
     env.hemi.groundColor.setHex(L.groundColor);
     env.hemi.intensity = sunny ? VI.light.hemiIntensity : L.hemiIntensity;
     env.sun.intensity = sunny ? VI.light.sunIntensity : L.sunIntensity;
   }
   env.torch.intensity = inside ? DG.torch.intensity : 0;
+}
+
+// Day/night in the valley: blend the day look (or the sunny post-victory look) toward night by
+// the sun's height, with a warm tint near sunrise/sunset. t: 0..1 (0 midnight, 0.5 noon).
+// Returns { day } (0 = full night, 1 = full day).
+const _a = new THREE.Color(), _b = new THREE.Color(), _dusk = new THREE.Color();
+export function dayLight(t) {
+  const sunH = Math.sin((t - 0.25) * Math.PI * 2);                       // -1 midnight .. 1 noon
+  return { sunH, day: Math.min(1, Math.max(0, (sunH + 0.15) / 0.4)) };
+}
+
+export function applyDayNight(env, t, sunny = false) {
+  const DN = CONFIG.dayNight, N = DN.night, F = CONFIG.fog, L = CONFIG.light, VI = CONFIG.victory;
+  const { sunH, day } = dayLight(t);
+  const duskK = Math.max(0, 1 - Math.abs(sunH) / 0.3) * 0.45;
+  _dusk.setHex(DN.dusk);
+  const mix = (dayHex, nightHex) => _a.setHex(nightHex).lerp(_b.setHex(dayHex), day).lerp(_dusk, duskK);
+  const dayFog = sunny ? VI.fog.color : F.color;
+  env.scene.background.copy(mix(dayFog, N.fog));
+  env.scene.fog.color.copy(env.scene.background);
+  env.hemi.color.copy(mix(sunny ? VI.light.skyColor : L.skyColor, N.sky));
+  env.hemi.groundColor.copy(_a.setHex(N.ground).lerp(_b.setHex(L.groundColor), day));
+  env.hemi.intensity = N.hemi + ((sunny ? VI.light.hemiIntensity : L.hemiIntensity) - N.hemi) * day;
+  env.sun.color.copy(_a.setHex(N.moon).lerp(_b.setHex(L.sunColor), day).lerp(_dusk, duskK));
+  env.sun.intensity = N.moonI + ((sunny ? VI.light.sunIntensity : L.sunIntensity) - N.moonI) * day;
+  const ang = (t - 0.25) * Math.PI * 2;                                   // sun (or moon) arcs over
+  env.sun.position.set(Math.cos(ang) * 100, Math.max(0.25, Math.abs(Math.sin(ang))) * 100, 30);
+  env.torch.intensity = DN.torchAtNight * (1 - day);
+  return { day };
 }
 
 export class Snow {

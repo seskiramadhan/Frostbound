@@ -252,6 +252,7 @@ export class Session {
         break;
       case MSG.WORLD:
         if (Array.isArray(m.list)) this.mirror.push(m.list, m.slow);
+        if (Number.isFinite(m.tod)) g.setTime(m.tod);   // the host's time of day
         break;
       case MSG.HURT:
         g.onHurt(Number(m.d) || 0, !!m.b, { x: Number(m.x) || 0, z: Number(m.z) || 0 });
@@ -287,7 +288,7 @@ export class Session {
       const list = [[this.myId, mine]];
       for (const [id, p] of this.players) if (p.pose) list.push([id, p.pose]);
       this.transport.broadcast({ k: MSG.POSES, list });
-      this.transport.broadcast({ k: MSG.WORLD, list: g.enemies.map(encodeEnemy), slow: g.shouts.slowLeft > 0 });
+      this.transport.broadcast({ k: MSG.WORLD, list: g.enemies.map(encodeEnemy), slow: g.shouts.slowLeft > 0, tod: +g.time().toFixed(4) });
     }
   }
 

@@ -56,7 +56,7 @@ end of every piece of work (what's done, what's next).
   - **3–4 dungeons** (caves/ruins, each with a word wall or a key item)
   - **Mountain peak** (final dragon)
 - A roaming dragon randomly circles the valley
-- Day/night cycle (optional, phase 5)
+- Day/night cycle (12-minute days; raids can come at night)
 
 ## Quests
 - **Main quest (~5 steps):** village → first dungeon → learn shouts →
@@ -167,8 +167,11 @@ src/
   guards (team 'player', hunting 'beast'); `raider: true` marches on the village and hits barricades.
 - **Raids** (`systems/raid.js`): all raiders, guards and barricades are created at startup (fixed
   entity ids for co-op) and reused; the host runs waves and emits 'raid' events. Barricades are
-  entities (`kind: 'barricade'`, `fixed`); dragons only target `kind: 'player'`. The valley has
-  `platforms` (watchtower top) that `heightAt` stands on.
+  entities (`kind: 'barricade'`, `fixed`); dragons only target `kind: 'player'`.
+- **Platforms:** `valley.addPlatform` (box or circle with a top height) makes things you can stand on:
+  rocks and the watchtower. `heightAt` returns the top; walking into one is blocked like a steep slope.
+- **Day/night:** `dayTime` 0..1 in main.js, `applyDayNight` in environment.js (valley only); the co-op
+  host's clock is sent in WORLD messages.
 - **Enemy levels** (`systems/levels.js`): every creature config has a design level `lvl`; `scales: true`
   (or a refilled dungeon) makes it match the player's level. `scaleCreature` in main.js runs on every
   respawn (`creature.onRespawn`). Archers are creatures with `ranged: true` ('creatureShoot').

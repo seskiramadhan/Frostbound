@@ -4,7 +4,7 @@ import { CONFIG, IS_TOUCH } from './config.js';
 import { Input } from './input.js';
 import { Terrain } from './world/terrain.js';
 import { buildProps } from './world/props.js';
-import { setupEnvironment, applyAmbience, Snow } from './world/environment.js';
+import { setupEnvironment, applyAmbience, applyDayNight, dayLight, Snow } from './world/environment.js';
 import { Dungeon, FROSTFANG_DEN, BLEAKROCK_BARROW, USTENGRAV, buildEntrance } from './world/dungeon.js';
 import { Monastery } from './world/monastery.js';
 import { Chest } from './world/chest.js';
@@ -61,6 +61,7 @@ scene.add(valley.mesh);
 const props = buildProps(valley);
 scene.add(props.group);
 valley.colliders = props.colliders;
+for (const p of props.platforms) valley.addPlatform(p);   // rocks you can jump onto
 const dungeons = {}, entrances = {};
 for (const def of [FROSTFANG_DEN, BLEAKROCK_BARROW, USTENGRAV]) {
   const d = new Dungeon(def);
@@ -174,6 +175,7 @@ const hud = new Hud();
 const session = new Session({
   events, scene, player, inventory, entities, combat, shouts, levels, dragon,
   enemies: [...creatures, dragon, huntDragon, worldEater, ...raid.units], onHurt: guestHurt,
+  time: () => dayTime, setTime: t => { dayTime = t; },
 });
 const coopPanel = new CoopPanel(session, {
   blocker: () => huntBlocker(), start: () => startHunt(), level: () => huntsWon + 1, active: () => huntDragon.active,
@@ -582,6 +584,27 @@ function victory() {
   }, 1.2), 4500);
 }
 
+// ---- Day and night (the valley). The host runs the clock; co-op guests follow it. ----
+const DN = CONFIG.dayNight;
+let dayTime = DN.start, wasNight = null;
+
+// Called every frame: advance time, light the valley, announce nightfall/dawn, maybe a night raid.
+function updateDayNight(dt, playing) {
+  if (playing && session.role !== 'guest') dayTime = (dayTime + dt / DN.length) % 1;
+  const night = dayLight(dayTime).day < 0.35;
+  valley.night = night;
+  if (player.level === valley) applyDayNight(env, dayTime, !!flags.victory);
+  hud.setClock(player.level === valley || player.level.outdoor ? (night ? '☾ Night' : '☀ Day') : '');
+  if (wasNight !== null && night !== wasNight && started) {
+    if (player.level === valley) hud.toast(night ? 'Night falls over the valley' : 'Dawn breaks over the valley');
+    if (night && !raidBlocker() && player.pos.length() < 70 && Math.random() < DN.nightRaidChance) {   // only near the village
+      hud.announce('Raiders under cover of night!', 'The bell rings in Frosthollow');
+      startRaid();
+    }
+  }
+  wasNight = night;
+}
+
 // ---- Raids on Frosthollow ----
 let raidsWon = 0, shopClosedUntil = 0;
 const anyPlayerUp = () => player.alive || [...session.players.values()].some(p => p.body?.alive && p.body.level === valley);
@@ -733,6 +756,7 @@ function save() {
     ng,
     hunts: huntsWon,
     raids: raidsWon,
+    dayTime,
     shopClosedUntil,
     jobs: jobs.toJSON(),
     flags,
@@ -754,6 +778,7 @@ function applySave(s) {
   shouts.load(s.shouts);
   huntsWon = Math.max(0, s.hunts | 0);
   raidsWon = Math.max(0, s.raids | 0);
+  if (Number.isFinite(s.dayTime)) dayTime = ((s.dayTime % 1) + 1) % 1;
   shopClosedUntil = +s.shopClosedUntil || 0;
   ng = Math.max(0, s.ng | 0);
   Object.assign(tiers, s.world?.tiers);
@@ -843,6 +868,7 @@ const talkCtx = {
     if (!inventory.spend(VIL.roomPrice)) { dialog.say('You can\'t afford a room.'); return true; }
     player.heal(player.maxHp);
     player.stamina = player.maxStamina;
+    if (session.role !== 'guest' && dayLight(dayTime).day < 0.5) { dayTime = DN.morning; wasNight = false; }   // sleep till morning
     hud.toast(`Rested at the inn (-${VIL.roomPrice} gold). Fully healed.`);
     save();
     return false;
@@ -1119,6 +1145,7 @@ function frame(now) {
   hud.setBoss(raid.active && player.level === valley ? raid.warlord : player.level === summit ? (worldEater.alive ? worldEater : null)
     : player.level !== valley ? null : dragon.alive ? dragon : huntDragon.alive ? huntDragon : null);
 
+  updateDayNight(dt, playing);
   updateSound(dt);
   hud.frame(dt, player);
   // Creatures beyond the fog can't be seen anyway: skip their draw calls this frame
@@ -1146,5 +1173,5 @@ window.frostbound = {
   tpCam, renderer,
   go: (level, at, facing = 0) => { player.moveTo(level, at, facing); enterLevel(level, facing); },
   dragonAttack: () => startHunt(true), get ng() { return ng; }, tiers, refills, raid, jobs, tower, bell, startRaid,
-  get raidsWon() { return raidsWon; }, combat, camp, banditChief, campChest, monastery, ustengrav, get playerLevel() { return pLevel(); },
+  get raidsWon() { return raidsWon; }, combat, get dayTime() { return dayTime; }, set dayTime(t) { dayTime = t; }, camp, banditChief, campChest, monastery, ustengrav, get playerLevel() { return pLevel(); },
 };

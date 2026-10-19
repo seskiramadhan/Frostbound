@@ -116,7 +116,7 @@ export function buildTower(scene, level) {
   mesh.position.set(T.x, y, T.z);
   mesh.updateMatrix();
   scene.add(mesh);
-  level.platforms.push({ x: T.x, z: T.z, hw: s + 0.2, hd: s + 0.2, y: y + h });
+  level.addPlatform({ x: T.x, z: T.z, hw: s + 0.2, hd: s + 0.2, y: y + h });
   return {
     base: new THREE.Vector3(T.x, y, T.z - s - 1.2),
     top: new THREE.Vector3(T.x, y + h, T.z),

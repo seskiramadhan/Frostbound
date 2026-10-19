@@ -190,6 +190,12 @@ export class Hud {
 
   setSlow(on) { this.slowEl.classList.toggle('on', on); }
 
+  // '☀ Day' / '☾ Night' in the corner (empty indoors).
+  setClock(text) {
+    const el = this.clockEl ??= document.getElementById('clock');
+    if (el.textContent !== text) el.textContent = text;
+  }
+
   // Small 'room CODE · 2/4' chip while in co-op.
   setCoop(session) {
     const chip = this.coopChip ??= document.getElementById('coop-chip');
