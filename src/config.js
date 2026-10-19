@@ -80,7 +80,89 @@ export const CONFIG = {
     radius: 0.4,
     maxClimb: 1.1,         // max rise per unit moved (slope limit)
     worldMargin: 12,       // keep away from terrain edge
+    airControl: 0.25,      // accel multiplier while airborne
     spawn: [0, 0],
+  },
+
+  stats: {
+    maxHealth: 100,
+    maxStamina: 100,
+    staminaRegen: 28,      // per second
+    staminaRegenDelay: 0.8,// seconds after spending before regen starts
+    blockRegenMul: 0.4,    // regen multiplier while blocking
+    healthRegen: 1,        // per second, out of combat
+    healthRegenDelay: 6,   // seconds since last hit
+    respawnDelay: 2.5,
+  },
+
+  combat: {
+    attack: {
+      windup: 0.16,        // seconds before the blade connects
+      recover: 0.3,        // seconds after the strike
+      damage: 14,
+      reach: 2.3,          // + target radius
+      arc: 1.1,            // half-angle in radians
+      staminaCost: 5,      // attacks still work at 0 stamina
+      lunge: 3,            // forward impulse on strike
+      turnSpeed: 20,
+      buffer: 0.25,        // early presses are remembered this long
+    },
+    block: {
+      reduction: 0.85,     // fraction of damage stopped
+      arc: 1.4,            // half-angle in front that can be blocked
+      staminaPerHit: 18,   // not enough stamina = guard break
+      moveMul: 0.4,
+      faceRange: 6,        // while blocking, turn toward the nearest enemy this close
+    },
+    dodge: {
+      duration: 0.32,
+      iframes: 0.26,       // invulnerable for this long from the start
+      speed: 12,
+      staminaCost: 22,
+      buffer: 0.2,
+    },
+    jump: {
+      velocity: 6.2,
+      gravity: 20,
+      staminaCost: 6,
+    },
+    stagger: { player: 0.3, guardBreak: 0.6, enemy: 0.35, knockback: 3 },
+    autoAim: { range: 4, arc: 1.0, closeRange: 3 },  // snap attacks toward an enemy ahead, else any one this close
+    flashTime: 0.12,
+    shake: { hit: 0.5, block: 0.25, decay: 5 },
+  },
+
+  wolf: {
+    name: 'Wolf',
+    packSize: 3,
+    packDistance: 60,      // pack home distance from the player spawn
+    packSpread: 5,
+    maxHealth: 40,
+    radius: 0.5,
+    walkSpeed: 1.8,
+    runSpeed: 7,
+    accel: 8,
+    turnSpeed: 8,
+    maxClimb: 1.4,
+    detectRadius: 18,
+    loseRadius: 32,
+    leashRadius: 45,       // from home; beyond this it gives up and goes back
+    wanderRadius: 9,
+    wanderPause: [2, 5],   // seconds between wander moves [min, max]
+    attackRange: 2.0,
+    circleRange: 3.2,      // wolves waiting their turn hover at this distance
+    attackersAtOnce: 1,    // pack members that may bite at the same time
+    healRate: 4,           // hp per second while not hunting
+    windup: [0.5, 0.8],
+    lungeSpeed: 6,
+    biteAt: 0.1,           // seconds into the bite when it connects
+    biteTime: 0.3,
+    biteDamage: 8,
+    biteReach: 1.5,        // + target radius
+    biteArc: 0.8,
+    recover: [1.0, 1.8],
+    corpseTime: 8,         // seconds the body stays
+    respawnTime: 30,
   },
 
   camera: {
@@ -99,5 +181,10 @@ export const CONFIG = {
     joystickRadius: 55,    // px
     joystickDeadzone: 0.12,
     runThreshold: 0.85,    // joystick push beyond this = run
+    // Right-side touch gestures: tap = attack, hold = block, swipe = dodge, drag = camera
+    tapSlop: 14,           // px a tap/hold may wander
+    holdTime: 0.3,         // seconds still before it counts as block
+    swipeMinDist: 70,      // px
+    swipeMaxTime: 0.2,     // seconds
   },
 };

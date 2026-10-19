@@ -6,6 +6,11 @@ import { Terrain } from './world/terrain.js';
 import { buildProps } from './world/props.js';
 import { setupEnvironment, Snow } from './world/environment.js';
 import { Player } from './entities/player.js';
+import { spawnWolfPack } from './entities/wolf.js';
+import { EventBus } from './systems/events.js';
+import { EntityRegistry } from './systems/entities.js';
+import { Combat } from './systems/combat.js';
+import { separateBodies } from './systems/physics.js';
 import { ThirdPersonCamera } from './camera.js';
 import { Hud } from './ui/hud.js';
 
@@ -26,12 +31,27 @@ const props = buildProps(terrain);
 scene.add(props.group);
 const snow = new Snow(scene);
 
-const player = new Player(scene, terrain, props.colliders);
+const events = new EventBus();
+const entities = new EntityRegistry();
+new Combat(events, entities);
+
+const player = entities.add(new Player(scene, terrain, props.colliders, events, entities));
+const wolves = spawnWolfPack(scene, terrain, props.colliders, events, entities);
 const tpCam = new ThirdPersonCamera(camera, terrain);
 tpCam.yaw = player.facing + Math.PI; // start behind the player
 
 const hud = new Hud();
-const input = new Input(renderer.domElement, document.getElementById('joy'), document.getElementById('joy-knob'));
+const input = new Input(renderer.domElement, document.getElementById('joy'),
+  document.getElementById('joy-knob'), document.getElementById('btn-jump'));
+
+// Combat feedback
+const SHAKE = CONFIG.combat.shake;
+events.on('damage', ({ target }) => {
+  if (target === player) { hud.hurt(); tpCam.shake(SHAKE.hit); }
+  else hud.showTarget(target);
+});
+events.on('blocked', ({ target }) => { if (target === player) tpCam.shake(SHAKE.block); });
+events.on('death', ({ target }) => { if (target === player) hud.showDeath(true); });
 
 // Start / pause
 let started = false;
@@ -45,6 +65,19 @@ hud.overlay.addEventListener('click', () => {
   }
 });
 input.onLockChange = locked => hud.showOverlay(!locked);
+
+function tick(dt) {
+  const cmd = input.update();
+  if (player.canRespawn && cmd.attack) {
+    player.respawn();
+    hud.showDeath(false);
+    tpCam.yaw = player.facing + Math.PI;
+    cmd.attack = false;
+  }
+  player.tick(dt, cmd, tpCam.yaw);
+  for (const w of wolves) w.tick(dt);
+  separateBodies(entities);
+}
 
 // Loop
 const STEP = 1 / CONFIG.loop.tickRate;
@@ -62,8 +95,7 @@ function frame(now) {
     tpCam.look(look.x, look.y);
     acc += dt;
     while (acc >= STEP) {
-      input.update();
-      player.tick(STEP, input.move, input.run, tpCam.yaw);
+      tick(STEP);
       acc -= STEP;
     }
   } else {
@@ -71,10 +103,12 @@ function frame(now) {
     acc = 0;
   }
 
-  player.render(playing ? acc / STEP : 1, renderPos);
+  const alpha = playing ? acc / STEP : 1;
+  player.render(alpha, renderPos);
+  for (const w of wolves) w.render(alpha);
   tpCam.update(dt, renderPos);
   snow.update(dt, renderPos);
-  hud.frame(dt);
+  hud.frame(dt, player);
   renderer.render(scene, camera);
 }
 requestAnimationFrame(frame);
@@ -84,3 +118,6 @@ addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
+
+// Debug handle for testing in the console
+window.frostbound = { player, wolves, entities, events };
