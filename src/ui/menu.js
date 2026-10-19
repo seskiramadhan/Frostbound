@@ -2,6 +2,7 @@
 import { CONFIG } from '../config.js';
 import { SKILL_IDS } from '../systems/skills.js';
 import { SHOUT_IDS } from '../systems/shouts.js';
+import { playerLevel } from '../systems/levels.js';
 
 const $ = id => document.getElementById(id);
 const TYPE_NAMES = { weapon: 'Weapons', bow: 'Bows', armor: 'Apparel', potion: 'Potions', tome: 'Books', misc: 'Misc', quest: 'Quest items' };
@@ -120,7 +121,10 @@ export class Menu {
   }
 
   #renderSkills() {
-    const K = CONFIG.skills;
+    const K = CONFIG.skills, L = CONFIG.levels;
+    const lv = playerLevel(this.skills);
+    this.#row('m-gold').textContent = `Level ${lv}`;
+    this.#row('m-hint m-desc').textContent = `Every ${L.skillUpsPerLevel} skill increases raise your level. Bandits, raiders and dragons grow with you; the den and barrow don't.`;
     for (const id of SKILL_IDS) {
       const r = this.#row('m-skill');
       const top = document.createElement('div');

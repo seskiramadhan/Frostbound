@@ -1,5 +1,5 @@
 // Raids on Frosthollow. The player starts one (village bell, or the Jarl's "Defend" job); after a
-// warning, 3 waves march in from the forest along lanes. Raiders break barricades and fight
+// warning, 4 waves march in from the forest along lanes. Raiders break barricades and fight
 // guards and players. Win: every wave cleared. Lose: every barricade broken, or everyone down.
 // All units are made at startup (fixed entity ids for co-op) and reused. The host runs the raid;
 // guests mirror the units and follow the phases from 'raid' events.
@@ -19,19 +19,20 @@ export class Raid {
     this.barricades = R.lanes.map(l => entities.add(new Barricade(scene, valley, ...l.barricade)));
     const make = (cfg, n, home, pack) => Array.from({ length: n }, () => {
       const c = entities.add(new Creature(scene, valley, events, entities, home, pack, { cfg, respawns: false, spread: 0 }));
-      c.raidBase = { ...c.cfg };
       c.removeForGood();
       pack.push(c);
       return c;
     });
     const most = t => Math.max(...R.waves.map(w => w[t] ?? 0));
-    const wolves = [], draugr = [];
+    const wolves = [], draugr = [], bandits = [];
     this.pool = {
       wolf: make({ ...R.raider }, most('wolf'), this.center, wolves),
       draugr: make({ ...CONFIG.draugr, ...R.raider }, most('draugr'), this.center, draugr),
       warlord: make({ ...CONFIG.draugr, ...R.warlord, ...R.raider }, most('warlord'), this.center, draugr),
+      bandit: make({ ...CONFIG.bandit, ...R.raider }, most('bandit'), this.center, bandits),
+      banditArcher: make({ ...CONFIG.bandit, ...CONFIG.banditArcher, ...R.raider }, most('banditArcher'), this.center, bandits),
     };
-    this.raiders = [...this.pool.wolf, ...this.pool.draugr, ...this.pool.warlord];
+    this.raiders = Object.values(this.pool).flat();
     const guards = [];
     this.guards = R.guards.map(([x, z]) => make({ ...CONFIG.draugr, ...R.guard }, 1, new THREE.Vector3(x, 0, z), guards)[0]);
     this.phase = 'idle';
@@ -61,11 +62,11 @@ export class Raid {
     this.events.emit('raid', { data: { phase, wave: this.wave, level: this.level, ...extra } });
   }
 
-  // Host / solo: begin the countdown. mul: { hp, dmg } from raid level and New Game+.
-  start(level, mul) {
+  // Host / solo: begin the countdown. `level` is just the raid count (for the reward); how tough
+  // the raiders are comes from enemy levels (each creature's onRespawn scales it).
+  start(level) {
     if (this.active) return;
     this.level = level;
-    this.mul = mul;
     this.wave = 0;
     this.phase = 'warning';
     this.timer = R.warning;
@@ -76,10 +77,6 @@ export class Raid {
   }
 
   #spawn(c, at) {
-    const b = c.raidBase, raider = !!b.raider;
-    const hp = raider ? this.mul.hp : 1, dmg = raider ? this.mul.dmg : 1;
-    c.cfg = { ...b, maxHealth: b.maxHealth * hp, biteDamage: b.biteDamage * dmg };
-    c.maxHp = c.cfg.maxHealth;
     c.respawns = false;
     c.respawn();
     c.pos.set(at.x, this.valley.heightAt(at.x, at.z), at.z);

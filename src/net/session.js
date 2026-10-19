@@ -13,7 +13,7 @@ import { Mirror } from './mirror.js';
 
 const N = CONFIG.net;
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // no I/L/O/0/1 to avoid typos
-const WORLD_EVENTS = ['dragonRoar', 'dragonDowned', 'dragonDead', 'huntStart', 'bossPhase2', 'raid'];
+const WORLD_EVENTS = ['dragonRoar', 'dragonDowned', 'dragonDead', 'huntStart', 'bossPhase2', 'raid', 'enemyShot'];
 
 export function randomCode() {
   let s = '';

@@ -53,6 +53,7 @@ export function buildProps(terrain) {
     for (let tries = 0; tries < 30; tries++) {
       const x = (rand() * 2 - 1) * lim, z = (rand() * 2 - 1) * lim;
       if (Math.hypot(x, z) < P.clearRadius) continue;
+      if (P.clearings.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r)) continue;
       const h = terrain.heightAt(x, z);
       if (h > maxH || terrain.slopeAt(x, z) < maxSlope) continue;
       return { x, z, h };

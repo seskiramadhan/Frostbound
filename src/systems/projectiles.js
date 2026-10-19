@@ -1,5 +1,6 @@
 // Arrows: pooled meshes flying with gravity. Hits go through combat with source 'arrow';
-// misses stick in the ground or wall for a moment.
+// misses stick in the ground or wall for a moment. Cosmetic arrows (what co-op guests see of
+// enemy shots, which the host resolves) fly and stick but never hit.
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 
@@ -23,7 +24,7 @@ export class Projectiles {
   }
 
   // Fire from `from` toward world point `at` with `power` 0..1.
-  fire(shooter, from, at, power, damage) {
+  fire(shooter, from, at, power, damage, cosmetic = false) {
     const a = this.list[this.next];
     this.next = (this.next + 1) % POOL;
     const speed = BW.speed * (0.55 + 0.45 * power);
@@ -35,6 +36,7 @@ export class Projectiles {
     a.shooter = shooter;
     a.level = shooter.level;
     a.damage = damage;
+    a.cosmetic = cosmetic;
     a.life = BW.life;
     a.live = true;
     a.stuck = false;
@@ -58,7 +60,7 @@ export class Projectiles {
       this.#orient(a);
 
       // Hit something alive?
-      for (const e of this.entities) {
+      for (const e of a.cosmetic ? [] : this.entities) {
         if (!e.alive || e.team === a.shooter.team || e.level !== a.level) continue;
         const r = (e.flying ? e.airRadius : e.radius) + BW.hitPad;
         const cy = e.pos.y + (e.aimHeight ?? 0.8);

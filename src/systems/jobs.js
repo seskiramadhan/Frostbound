@@ -27,6 +27,11 @@ export const JOB_TYPES = {
     pitch: 'A dragon has been seen circling the valley. You know how to deal with those, Dragonborn.',
     ok: w => w.quests.isDone('dragonRising') && !w.huntDragon.active,
   },
+  bandits: {
+    text: 'Clear out the bandit camp',
+    pitch: 'Bandits are back in their camp in the western forest, robbing the road. Clear them out.',
+    ok: () => true,
+  },
   raid: {
     text: 'Defend Frosthollow from the raiders',
     pitch: 'My scouts saw raiders gathering in the forest. They will hit us soon. Man the barricades!',
@@ -100,6 +105,7 @@ export class Jobs {
     if (!c) return false;
     const d = this.#dungeon();
     if (d && !c.complete) c.complete = !this.world.creaturesIn(d).some(e => e.alive);
+    if (c.type === 'bandits' && !c.complete) c.complete = !this.world.campBandits().some(e => e.alive);
     return c.complete;
   }
 
@@ -122,6 +128,10 @@ export class Jobs {
     if (c.type === 'wolves') {
       const wolf = w.valleyWolves().find(e => e.alive);
       return wolf ? { level: w.valley, pos: wolf.pos } : null;
+    }
+    if (c.type === 'bandits') {
+      const b = w.campBandits().find(e => e.alive);
+      return { level: w.valley, pos: b ? b.pos : w.camp.center };
     }
     if (c.type === 'dragon') return w.huntDragon.active ? { level: w.valley, pos: w.huntDragon.pos } : null;
     if (c.type === 'raid') return { level: w.valley, pos: w.bellPos };

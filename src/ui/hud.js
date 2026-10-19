@@ -5,6 +5,7 @@ import { CONFIG, IS_TOUCH } from '../config.js';
 
 const $ = id => document.getElementById(id);
 const v = new THREE.Vector3();
+const withLevel = e => (e.lvl ? `${e.name} · Lv ${e.lvl}` : e.name);
 
 export class Hud {
   constructor() {
@@ -76,7 +77,7 @@ export class Hud {
   showTarget(entity) {
     this.target = entity;
     this.targetTime = 4;
-    this.targetName.textContent = entity.name;
+    this.targetName.textContent = withLevel(entity);
   }
 
   showDeath(show) {
@@ -199,7 +200,8 @@ export class Hud {
   setBoss(entity) {
     this.bossEl.style.display = entity ? 'block' : 'none';
     if (!entity) return;
-    if (this.bossName.textContent !== entity.name) this.bossName.textContent = entity.name;
+    const name = withLevel(entity);
+    if (this.bossName.textContent !== name) this.bossName.textContent = name;
     this.bossBar.style.transform = `scaleX(${Math.min(1, Math.max(0, entity.hp) / entity.maxHp)})`;
   }
 

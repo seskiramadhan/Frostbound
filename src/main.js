@@ -15,7 +15,7 @@ import { talk } from './systems/dialogue.js';
 import { Dialog } from './ui/dialog.js';
 import { GameAudio } from './audio.js';
 import { Player } from './entities/player.js';
-import { spawnWolfPack, spawnDungeonCreatures } from './entities/creature.js';
+import { Creature, spawnWolfPack, spawnDungeonCreatures } from './entities/creature.js';
 import { Dragon } from './entities/dragon.js';
 import { EventBus } from './systems/events.js';
 import { EntityRegistry } from './systems/entities.js';
@@ -30,6 +30,8 @@ import { Stealth, witness } from './systems/stealth.js';
 import { Raid } from './systems/raid.js';
 import { Jobs } from './systems/jobs.js';
 import { buildBell, buildTower } from './world/defenses.js';
+import { buildCamp } from './world/camp.js';
+import { playerLevel, enemyLevel, levelMul } from './systems/levels.js';
 import { Quests } from './systems/quests.js';
 import { loadSave, writeSave, clearSave } from './systems/save.js';
 import { ThirdPersonCamera } from './camera.js';
@@ -101,6 +103,20 @@ const raid = new Raid(scene, valley, events, entities);     // raiders, guards, 
 const bell = buildBell(scene, valley);
 const tower = buildTower(scene, valley);
 const RD = CONFIG.raid;
+// The bandit camp in the western forest: bandits, archers and their chief (scale with your level)
+const camp = buildCamp(scene, valley);
+const campPack = [];
+const banditCfg = { ...CONFIG.bandit };
+for (const [cfg, n] of [[banditCfg, CONFIG.camp.bandits], [{ ...banditCfg, ...CONFIG.banditArcher }, CONFIG.camp.archers], [{ ...banditCfg, ...CONFIG.banditChief }, 1]]) {
+  for (let i = 0; i < n; i++) {
+    const c = entities.add(new Creature(scene, valley, events, entities, camp.center, campPack, { cfg }));
+    campPack.push(c);
+    creatures.push(c);
+  }
+}
+const banditChief = campPack[campPack.length - 1];
+const campChest = new Chest(scene, valley, camp.chest, 'banditChest', Math.PI / 2);
+campChest.key = 'valley.banditChest';
 const chests = Object.values(dungeons).flatMap(d => d.chests.map(c => new Chest(scene, d, c.pos, c.lootKey, Math.PI)));
 const projectiles = new Projectiles(scene, entities, combat);
 const magic = new Magic(scene, entities, combat, fx);
@@ -124,7 +140,7 @@ const visited = {};
 const flags = {};        // story switches set in conversations (metJarl, reportedDen, ...)
 const world = {
   valley, den, barrow, summit, entrances, inventory, visited, flags, shouts, dragon, worldEater, huntDragon, raid,
-  bellPos: bell.pos,
+  bellPos: bell.pos, camp, banditChief, campBandits: () => campPack,
   creaturesIn: level => creatures.filter(c => c.level === level),
   valleyWolves: () => creatures.filter(c => c.level === valley && c.kind === 'wolf'),
   alpha: bosses.den, wight: bosses.barrow, summitCentre: new THREE.Vector3(summit.ox, 0, summit.oz),
@@ -136,6 +152,7 @@ world.quests = quests;
 const jobs = new Jobs(world, {
   begin: type => {
     if (type === 'den' || type === 'barrow') refillDungeon(dungeons[type], true);
+    else if (type === 'bandits') { for (const c of campPack) if (!c.alive) c.respawn(); }
     else if (type === 'dragon') startHunt(true);
     else if (type === 'raid') startRaid();
   },
@@ -218,6 +235,17 @@ function steal(box) {
   save();
 }
 
+// The bandits' chest: free loot (they stole it anyway), refills after a while.
+function openCampChest() {
+  campChest.open();
+  campChest.openedAt = Date.now();
+  audio.play('chest');
+  const loot = CONFIG.loot.banditChest;
+  for (const [id, n] of Object.entries(loot.items)) inventory.add(id, n);
+  inventory.addGold(loot.gold + 10 * (pLevel() - 1));
+  save();
+}
+
 function learnWord(d, w = d.wordWall) {
   fx.soul({ x: w.pos.x, y: 1, z: w.pos.z }, player.pos, 30);
   shouts.learn(w.shout);
@@ -256,6 +284,7 @@ const interactables = [
   ...strongboxes.map(b => ({ level: valley, pos: b.pos, label: `Steal from ${npcs.find(n => n.id === b.owner).name}'s strongbox`,
     enabled: () => !b.opened, use: () => steal(b) })),
   ...npcs.map(n => ({ level: valley, pos: n.pos, label: `Talk to ${n.name}`, enabled: () => !raid.active, use: () => openDialog(n) })),
+  { level: valley, pos: campChest.pos, label: 'Open the bandits\' chest', enabled: () => !campChest.opened, use: () => openCampChest() },
   // Raids: the alarm bell, the watchtower, repairing barricades mid-raid
   { level: valley, pos: bell.pos, label: 'Ring the bell (start a raid)', enabled: () => !raidBlocker(), use: () => startRaid() },
   { level: valley, pos: tower.base, label: 'Climb the watchtower', enabled: () => player.pos.y < tower.height - 1,
@@ -308,6 +337,27 @@ events.on('shootArrow', ({ shooter, power, damage }) => {
   aim(shooter, BW.speed * (0.55 + 0.45 * power));
   projectiles.fire(shooter, aimFrom, aimAt, power, damage);
 });
+// Bandit archers: aim at the target (with a little lead and spread). Co-op guests get a
+// harmless copy of the arrow to see.
+const shotFrom = new THREE.Vector3(), shotAt = new THREE.Vector3();
+events.on('creatureShoot', ({ shooter, target, damage }) => {
+  shotFrom.set(shooter.pos.x + Math.sin(shooter.facing) * 0.5, shooter.pos.y + 1.4, shooter.pos.z + Math.cos(shooter.facing) * 0.5);
+  shotAt.set(target.pos.x, target.pos.y + (target.aimHeight ?? 1), target.pos.z);
+  const t = shotFrom.distanceTo(shotAt) / (BW.speed * 0.775);
+  if (target.vel) shotAt.addScaledVector(target.vel, t * 0.4);
+  shotAt.x += (Math.random() - 0.5) * 1.2; shotAt.y += (Math.random() - 0.5) * 0.6; shotAt.z += (Math.random() - 0.5) * 1.2;
+  projectiles.fire(shooter, shotFrom, shotAt, 0.5, damage);
+  audio.play('bow', shooter.pos);
+  events.emit('enemyShot', { data: { lv: shooter.level.key ?? 'valley', f: shotFrom.toArray().map(v => +v.toFixed(2)), t: shotAt.toArray().map(v => +v.toFixed(2)) } });
+});
+events.on('enemyShot', ({ data, net }) => {
+  if (!net || !data?.f || !data?.t) return;            // guests only: just the arrow to look at
+  const lv = levels[data.lv];
+  if (!lv) return;
+  projectiles.fire({ team: 'beast', level: lv }, shotFrom.fromArray(data.f), shotAt.fromArray(data.t), 0.5, 0, true);
+  audio.play('bow', shotFrom);
+});
+
 events.on('castBolt', ({ caster, damage }) => {
   aim(caster, CONFIG.magic.firebolt.speed);
   magic.fire(caster, aimFrom, aimAt, damage);
@@ -327,14 +377,20 @@ events.on('death', ({ target, killer }) => {
     inventory.add(target === world.alpha ? CONFIG.loot.alphaDrop : CONFIG.loot.wolfDrop);
   }
   if (target.kind === 'wolf' && target.level === valley && !target.cfg.raider && killer === player) jobs.onWolfKilled();
+  if (target === banditChief) flags.chiefSlain = true;
+  const gd = target.cfg?.goldDrop;
+  if (gd && target.level === player.level && (killer === player || session.active)) inventory.addGold(Math.round(gd[0] + Math.random() * (gd[1] - gd[0])));
 });
 events.on('inventory', () => applyStats(player, inventory, skills));
 events.on('itemAdded', ({ id, count }) => hud.toast(`${ITEMS[id].name}${count > 1 ? ` (${count})` : ''} added`));
 events.on('goldAdded', ({ amount }) => hud.toast(`${amount} gold added`));
 events.on('potionUsed', ({ id }) => hud.toast(`${ITEMS[id].name} used`));
+let shownLevel = 1;
 events.on('skillUp', ({ id, name, level }) => {
   applyStats(player, inventory, skills);
   if (!skills.maxed(id)) hud.announce(`${name} increased to ${level}`);
+  const lv = pLevel();
+  if (lv > shownLevel) { shownLevel = lv; hud.announce(`You reached level ${lv}`, 'Bandits, raiders and dragons grow stronger with you.'); }
 });
 events.on('perk', ({ id, perk }) => hud.announce(`${CONFIG.skills[id].name} mastered`, `Perk unlocked: ${perk.name}. ${perk.desc}`));
 events.on('questStarted', ({ name, text }) => { hud.announce(`Quest started: ${name}`, text); save(); });
@@ -431,14 +487,15 @@ function huntBlocker() {
 
 function startHunt(attack = false) {
   if (!attack && huntBlocker()) return;
-  const level = huntsWon + 1;
+  const level = huntsWon + 1;                       // hunt number: name + gold
+  const dcfg = { lvl: HUNT.lvl, scales: true }, lvl = enemyLevel(dcfg, pLevel()), mul = levelMul(dcfg, lvl);
   const data = {
-    level,
+    level, lvl,
     name: HUNT.names[Math.min(level - 1, HUNT.names.length - 1)],
-    maxHp: Math.round(CONFIG.dragon.maxHealth * (1 + HUNT.hpPerLevel * (level - 1)) * ngHp()),
+    maxHp: Math.round(CONFIG.dragon.maxHealth * mul.hp * ngHp()),
     attack,
   };
-  huntDragon.activate(player, { name: data.name, maxHp: data.maxHp, dmgMul: (1 + HUNT.dmgPerLevel * (level - 1)) * ngDmg() });
+  huntDragon.activate(player, { name: data.name, maxHp: data.maxHp, dmgMul: mul.dmg * ngDmg() });
   events.emit('huntStart', { dragon: huntDragon, data });
 }
 
@@ -446,7 +503,8 @@ events.on('huntStart', ({ data }) => {
   huntDragon.name = data.name;          // guests learn the name/health from the host
   huntDragon.maxHp = data.maxHp;
   huntDragon.huntLevel = data.level;
-  hud.announce(data.attack ? 'A dragon attacks!' : 'Dragon hunt!', `${data.name} (level ${data.level}) is coming`);
+  huntDragon.lvl = data.lvl;
+  hud.announce(data.attack ? 'A dragon attacks!' : 'Dragon hunt!', `${data.name} (level ${data.lvl ?? data.level}) is coming`);
   if (menu.open) menu.render();
 });
 
@@ -494,8 +552,7 @@ function raidBlocker() {
 function startRaid() {
   const why = raidBlocker();
   if (why) { hud.toast(why); return; }
-  const level = raidsWon + 1;
-  raid.start(level, { hp: (1 + RD.hpPerLevel * (level - 1)) * ngHp(), dmg: (1 + RD.dmgPerLevel * (level - 1)) * ngDmg() });
+  raid.start(raidsWon + 1);
   bellTime = 0;
 }
 
@@ -557,15 +614,19 @@ const ngHp = () => 1 + PG.ngHp * ng;
 const ngDmg = () => 1 + PG.ngDmg * ng;
 let attackTimer = PG.dragonEvery[0];
 
-// Scale a creature for NG+ and its dungeon's respawn tier (from its original stats).
+// Set a creature's level and stats from its original config: fixed or scaling with your level
+// (anything in a refilled dungeon scales too), plus New Game+ for enemies.
+const pLevel = () => playerLevel(skills);
 function scaleCreature(c) {
   c.baseCfg ??= { ...c.cfg };
-  const tier = tiers[c.level.key] ?? 0;
-  const hp = ngHp() * (1 + PG.tierHp * tier), dmg = ngDmg() * (1 + PG.tierDmg * tier);
-  c.cfg = { ...c.baseCfg, maxHealth: c.baseCfg.maxHealth * hp, biteDamage: c.baseCfg.biteDamage * dmg };
+  const b = c.baseCfg, refilled = (tiers[c.level.key] ?? 0) > 0;
+  c.lvl = enemyLevel(b, pLevel(), refilled);
+  const m = levelMul(b, c.lvl), enemy = c.team !== 'player';
+  c.cfg = { ...b, maxHealth: b.maxHealth * m.hp * (enemy ? ngHp() : 1), biteDamage: b.biteDamage * m.dmg * (enemy ? ngDmg() : 1) };
   c.maxHp = c.cfg.maxHealth;
   if (c.alive) c.hp = Math.min(c.hp, c.maxHp) || c.maxHp;
 }
+for (const c of [...creatures, ...raid.raiders, ...raid.guards]) c.onRespawn = u => { scaleCreature(u); u.hp = u.maxHp; };
 
 // After victory: a cleared dungeon refills (tougher, better loot) when you come back later.
 function maybeRefillDungeon(d) {
@@ -580,7 +641,7 @@ function refillDungeon(d, quiet = false) {
   const mine = creatures.filter(c => c.level === d);
   tiers[d.key] = (tiers[d.key] ?? 0) + 1;
   refills[d.key] = Date.now();
-  for (const c of mine) { scaleCreature(c); c.respawns = false; c.respawn(); }
+  for (const c of mine) { c.respawns = false; c.respawn(); }
   for (const ch of chests) if (ch.level === d) { ch.opened = false; ch.openT = 0; ch.tier = tiers[d.key]; }
   if (!quiet) hud.toast(`${d.name} has new occupants... and new treasure`);
 }
@@ -612,6 +673,7 @@ function worldJSON() {
     chestTiers: Object.fromEntries(chests.filter(c => c.tier).map(c => [c.key, c.tier])),
     dead: creatures.filter(w => w.key && !w.alive).map(w => w.key),
     stolen: Object.fromEntries(strongboxes.filter(b => b.opened).map(b => [b.key, b.stolenAt ?? Date.now()])),
+    campChest: campChest.opened ? campChest.openedAt ?? Date.now() : 0,
     dragonDead: dragon.state === 'dead',
     worldEaterDead: worldEater.state === 'dead',
     tiers, refills,
@@ -656,6 +718,7 @@ function applySave(s) {
   Object.assign(visited, s.world?.visited);
   Object.assign(flags, s.flags);
   for (const key of s.world?.chests ?? []) world.chest(key)?.open(true);
+  if (s.world?.campChest) { campChest.open(true); campChest.openedAt = +s.world.campChest; }
   for (const [key, t] of Object.entries(s.world?.stolen ?? {})) {
     const b = strongboxes.find(x => x.key === key);
     if (b) { b.open(true); b.stolenAt = +t || Date.now(); }
@@ -674,6 +737,7 @@ function applySave(s) {
 
 const saved = loadSave();
 if (saved) applySave(saved);
+shownLevel = pLevel();
 for (const d of Object.values(dungeons)) {
   if (d.wordWall) d.setWordLearned(shouts.known.has(d.wordWall.shout));
   if (d.secretWall) d.setSecretState(!!flags.victory, shouts.known.has(d.secretWall.shout));
@@ -866,6 +930,11 @@ function tick(dt, controls) {
   for (const b of strongboxes) {   // strongboxes fill up again after a while
     if (b.opened && Date.now() - (b.stolenAt ?? 0) > ST.refill * 1000) { b.opened = false; b.openT = 0; }
   }
+  if (campChest.opened && Date.now() - (campChest.openedAt ?? 0) > CONFIG.camp.chestRefill * 1000) { campChest.opened = false; campChest.openT = 0; }
+  if (!visited.camp && player.level === valley && player.pos.distanceTo(camp.center) < 22) {
+    visited.camp = true;
+    hud.toast(`Discovered: ${CONFIG.camp.name}`);
+  }
   separateBodies(entities);
 
   // Quest flow: Dragon Rising follows The Howling Den; the dragon comes when you're back outside
@@ -951,6 +1020,8 @@ function frame(now) {
   huntDragon.render(alpha);
   worldEater.render(alpha);
   for (const c of chests) c.update(dt);
+  campChest.update(dt);
+  if (playing && player.level === valley && Math.random() < 0.3 && player.pos.distanceToSquared(camp.center) < 3600) fx.burn(camp.fire, 0.4, 1);
   raid.render(alpha, dt);
   bell.swing(bellTime += dt);
   if (playing && player.level === valley && Date.now() < shopClosedUntil && Math.random() < 0.25) fx.burn({ x: 14 + (Math.random() - 0.5) * 6, y: 3.2, z: -4 }, 1.5, 2);
@@ -1025,5 +1096,5 @@ window.frostbound = {
   tpCam, renderer,
   go: (level, at, facing = 0) => { player.moveTo(level, at, facing); enterLevel(level, facing); },
   dragonAttack: () => startHunt(true), get ng() { return ng; }, tiers, refills, raid, jobs, tower, bell, startRaid,
-  get raidsWon() { return raidsWon; }, combat,
+  get raidsWon() { return raidsWon; }, combat, camp, banditChief, campChest, get playerLevel() { return pLevel(); },
 };

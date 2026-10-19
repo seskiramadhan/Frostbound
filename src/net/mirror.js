@@ -49,16 +49,18 @@ export class Mirror {
       e.stateTime = A[7] + Math.max(0, now - lo.t);
       e.staggerTime ??= CONFIG.combat.stagger.enemy;
       e.hp = A[8];
+      if (A[10]) e.maxHp = A[10];          // the host's scaled stats and level (for health bars)
+      if (A[11]) e.lvl = A[11];
       e.alive = !!(A[9] & 1);
       const vis = !!(A[9] & 2);
       e.model.root.visible = e.model.shadow.visible = vis;
       const moved = Math.hypot(e.pos.x - ox, e.pos.z - oz);
       e.speed = dt > 0 && moved < 5 ? moved / dt : 0;
       e.walkPhase = (e.walkPhase ?? 0) + e.speed * dt * 2.6;
-      if (e.kind === 'dragon' && A.length > 10) {
-        e.vel.set(A[10], A[11], A[12]);
-        e.bank = A[13];
-        e.breathing = A[14] ? 0.1 : 0;
+      if (e.kind === 'dragon' && A.length > 12) {
+        e.vel.set(A[12], A[13], A[14]);
+        e.bank = A[15];
+        e.breathing = A[16] ? 0.1 : 0;
       }
     }
   }
