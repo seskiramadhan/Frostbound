@@ -21,6 +21,7 @@ Claude Code cloud sessions can commit and push to this repo directly (tested 202
 
 ## Co-op (preview)
 Bag → **Co-op** (or "Play with friends" on the start screen) → **Host a game** gives a
-5-letter room code and a share link (`?join=CODE`). Up to 4 players. Right now you
-see each other move; shared enemies come next. Works best on Wi-Fi: some mobile
-networks block direct phone-to-phone connections.
+5-letter room code and a share link (`?join=CODE`). Up to 4 players. The host's
+game runs every enemy (wolves, draugr, the dragon) and you fight them together;
+loot is per player and guests keep their own character. Works best on Wi-Fi: some
+mobile networks block direct phone-to-phone connections.
