@@ -1,18 +1,18 @@
-// The player: low-poly Nord, camera-relative movement on the terrain.
+// The player: low-poly Nord with a sword, camera-relative movement on the terrain.
+// States: move, block, attack, dodge, stagger, dead. Driven by one command object per tick.
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
+import { box, blobShadow, Flash, lerpAngle, lerp, clamp01 } from './model.js';
+import { moveBody, pushOutOfColliders, clampToWorld, settleOnGround, turnToward } from '../systems/physics.js';
+import { inArc } from '../systems/combat.js';
 
-const P = CONFIG.player;
+const P = CONFIG.player, S = CONFIG.stats, CB = CONFIG.combat;
+const A = CB.attack, B = CB.block, D = CB.dodge, J = CB.jump, AIM = CB.autoAim;
 
-function box(w, h, d, color, x, y, z) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color, flatShading: true }));
-  m.position.set(x, y, z);
-  return m;
-}
-
-function buildModel() {
+// Exported so co-op remote players can reuse the same look.
+export function buildModel() {
   const root = new THREE.Group();
-  const body = new THREE.Group();   // bobs while walking
+  const body = new THREE.Group();   // bobs / leans
   root.add(body);
 
   // Legs pivot at the hip
@@ -36,7 +36,7 @@ function buildModel() {
     body.add(horn);
   }
 
-  // Arms pivot at the shoulder
+  // Arms pivot at the shoulder. Model faces +z, so arms[0] (-x) is the right arm.
   const arms = [-0.38, 0.38].map(x => {
     const pivot = new THREE.Group(); pivot.position.set(x, 1.5, 0);
     pivot.add(box(0.17, 0.62, 0.2, 0x6b4c34, 0, -0.3, 0));
@@ -45,108 +45,296 @@ function buildModel() {
     return pivot;
   });
 
-  // Blob shadow (cheaper than shadow maps)
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.55, 12),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false }),
-  );
-  shadow.rotation.x = -Math.PI / 2;
+  // Sword in the right hand, blade pointing along the arm
+  const sword = new THREE.Group();
+  sword.add(box(0.06, 0.08, 0.06, 0x8a7a50, 0, -0.62, 0));    // pommel
+  sword.add(box(0.05, 0.2, 0.05, 0x3a2a1e, 0, -0.72, 0));     // grip
+  sword.add(box(0.3, 0.05, 0.08, 0x8a7a50, 0, -0.84, 0));     // crossguard
+  sword.add(box(0.08, 0.9, 0.03, 0xc9d0d8, 0, -1.31, 0));     // blade
+  arms[0].add(sword);
 
-  return { root, body, legs, arms, shadow };
+  const shadow = blobShadow(0.55);
+  return { root, body, legs, arms, sword, shadow };
 }
 
 export class Player {
-  constructor(scene, terrain, colliders) {
+  constructor(scene, terrain, colliders, events, entities) {
     this.terrain = terrain;
     this.colliders = colliders;
+    this.events = events;
+    this.entities = entities;
 
-    const [sx, sz] = P.spawn;
-    this.pos = new THREE.Vector3(sx, terrain.heightAt(sx, sz), sz);
-    this.prevPos = this.pos.clone();
+    this.kind = 'player';
+    this.team = 'player';
+    this.name = 'You';
+    this.radius = P.radius;
+    this.maxHp = S.maxHealth;
+    this.maxStamina = S.maxStamina;
+
+    this.pos = new THREE.Vector3();
+    this.prevPos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
-    this.facing = Math.PI;          // radians, model faces +z at 0
-    this.prevFacing = this.facing;
-    this.walkPhase = 0;
-    this.speed = 0;
+    this.dodgeDir = new THREE.Vector3();
 
     this.model = buildModel();
+    this.flash = new Flash(this.model.root);
     scene.add(this.model.root, this.model.shadow);
+    this.respawn();
   }
 
-  // Fixed-step update. move = {x, y} from input, yaw = camera yaw.
-  tick(dt, move, run, yaw) {
+  respawn() {
+    const [sx, sz] = P.spawn;
+    this.pos.set(sx, this.terrain.heightAt(sx, sz), sz);
+    this.prevPos.copy(this.pos);
+    this.vel.set(0, 0, 0);
+    this.vy = 0;
+    this.grounded = true;
+    this.facing = Math.PI;          // radians, model faces +z at 0
+    this.prevFacing = this.facing;
+    this.hp = this.maxHp;
+    this.stamina = this.maxStamina;
+    this.alive = true;
+    this.state = 'move';
+    this.stateTime = 0;
+    this.staggerTime = 0;
+    this.attackBuffer = 0;
+    this.dodgeBuffer = 0;
+    this.dodgeInput = null;
+    this.attackFacing = 0;
+    this.struck = false;
+    this.staminaDelay = 0;
+    this.sinceHit = 99;
+    this.walkPhase = 0;
+    this.speed = 0;
+  }
+
+  get blocking() { return this.state === 'block'; }
+  get invulnerable() { return this.state === 'dodge' && this.stateTime < D.iframes; }
+  get canRespawn() { return !this.alive && this.stateTime >= S.respawnDelay; }
+
+  #setState(s) { this.state = s; this.stateTime = 0; }
+
+  #spend(cost) {
+    this.stamina = Math.max(0, this.stamina - cost);
+    this.staminaDelay = S.staminaRegenDelay;
+  }
+
+  // Fixed-step update. cmd = { move: {x, y}, run, attack, block, dodge: {x, y} | null, jump }, yaw = camera yaw.
+  tick(dt, cmd, yaw) {
     this.prevPos.copy(this.pos);
     this.prevFacing = this.facing;
+    this.flash.tick(dt);
+    this.stateTime += dt;
+
+    if (!this.alive) {
+      this.vel.set(0, 0, 0);
+      settleOnGround(this, dt, this.terrain, J.gravity);
+      return;
+    }
+
+    this.#regen(dt);
+    this.attackBuffer = cmd.attack ? A.buffer : Math.max(0, this.attackBuffer - dt);
+    if (cmd.dodge) { this.dodgeBuffer = D.buffer; this.dodgeInput = cmd.dodge; }
+    else this.dodgeBuffer = Math.max(0, this.dodgeBuffer - dt);
 
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw);   // camera forward on XZ
     const rx = Math.cos(yaw), rz = -Math.sin(yaw);    // camera right
-    const speed = run ? P.runSpeed : P.walkSpeed;
-    const wx = (fx * move.y + rx * move.x) * speed;
-    const wz = (fz * move.y + rz * move.x) * speed;
+    const camFacing = Math.atan2(fx, fz);
+    const mx = fx * cmd.move.y + rx * cmd.move.x;     // wanted direction (world, length 0..1)
+    const mz = fz * cmd.move.y + rz * cmd.move.x;
 
-    const k = Math.min(1, P.accel * dt);
-    this.vel.x += (wx - this.vel.x) * k;
-    this.vel.z += (wz - this.vel.z) * k;
+    this.#advanceState();
+    if (this.state === 'move' || this.state === 'block') this.#chooseAction(cmd, mx, mz, fx, fz, rx, rz, camFacing);
 
-    this.#moveAxis(this.vel.x * dt, 0);
-    this.#moveAxis(0, this.vel.z * dt);
-    this.#pushOutOfColliders();
+    let wx = 0, wz = 0, turnTo = null, turnSpeed = P.turnSpeed;
+    switch (this.state) {
+      case 'move': {
+        const speed = cmd.run ? P.runSpeed : P.walkSpeed;
+        wx = mx * speed; wz = mz * speed;
+        break;
+      }
+      case 'block':
+        wx = mx * P.walkSpeed * B.moveMul; wz = mz * P.walkSpeed * B.moveMul;
+        turnTo = this.#autoAim(camFacing, B.faceRange, Math.PI);
+        break;
+      case 'attack':
+        turnTo = this.attackFacing; turnSpeed = A.turnSpeed;
+        break;
+    }
 
-    const lim = this.terrain.half - P.worldMargin;
-    this.pos.x = Math.min(lim, Math.max(-lim, this.pos.x));
-    this.pos.z = Math.min(lim, Math.max(-lim, this.pos.z));
-    this.pos.y = this.terrain.heightAt(this.pos.x, this.pos.z);
+    if (this.state === 'dodge') {
+      const k = Math.sqrt(Math.max(0, 1 - this.stateTime / D.duration));
+      this.vel.x = this.dodgeDir.x * D.speed * k;
+      this.vel.z = this.dodgeDir.z * D.speed * k;
+    } else {
+      const k = Math.min(1, P.accel * (this.grounded ? 1 : P.airControl) * dt);
+      this.vel.x += (wx - this.vel.x) * k;
+      this.vel.z += (wz - this.vel.z) * k;
+    }
+
+    moveBody(this, this.vel.x * dt, this.vel.z * dt, this.terrain, P.maxClimb);
+    pushOutOfColliders(this.pos, this.radius, this.colliders);
+    clampToWorld(this.pos, this.terrain, P.worldMargin);
+    settleOnGround(this, dt, this.terrain, J.gravity);
 
     const sp = Math.hypot(this.vel.x, this.vel.z);
-    if (sp > 0.2) {
-      const target = Math.atan2(this.vel.x, this.vel.z);
-      let diff = target - this.facing;
-      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      this.facing += diff * Math.min(1, P.turnSpeed * dt);
-    }
+    if (turnTo === null && this.state === 'move' && sp > 0.2) turnTo = Math.atan2(this.vel.x, this.vel.z);
+    if (turnTo !== null) this.facing = turnToward(this.facing, turnTo, turnSpeed * dt);
     this.walkPhase += sp * dt * 2.2;
     this.speed = sp;
   }
 
-  // Reject steps that climb steeper than the slope limit.
-  #moveAxis(dx, dz) {
-    if (dx === 0 && dz === 0) return;
-    const nx = this.pos.x + dx, nz = this.pos.z + dz;
-    const rise = this.terrain.heightAt(nx, nz) - this.terrain.heightAt(this.pos.x, this.pos.z);
-    if (rise > P.maxClimb * Math.hypot(dx, dz)) {
-      if (dx) this.vel.x = 0; else this.vel.z = 0;
-      return;
+  // Timed state transitions.
+  #advanceState() {
+    const t = this.stateTime;
+    if (this.state === 'attack') {
+      if (!this.struck && t >= A.windup) {
+        this.struck = true;
+        this.vel.x += Math.sin(this.facing) * A.lunge;
+        this.vel.z += Math.cos(this.facing) * A.lunge;
+        this.events.emit('attack', { attacker: this, damage: A.damage, reach: A.reach, arc: A.arc });
+      }
+      if (t >= A.windup + A.recover) this.#setState('move');
+    } else if (this.state === 'dodge') {
+      if (t >= D.duration) this.#setState('move');
+    } else if (this.state === 'stagger') {
+      if (t >= this.staggerTime) this.#setState('move');
     }
-    this.pos.x = nx; this.pos.z = nz;
   }
 
-  #pushOutOfColliders() {
-    const r = P.radius;
-    for (const c of this.colliders) {
-      const dx = this.pos.x - c.x, dz = this.pos.z - c.z, min = c.r + r;
-      if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
-      const d = Math.hypot(dx, dz);
-      if (d >= min || d === 0) continue;
-      this.pos.x = c.x + dx / d * min;
-      this.pos.z = c.z + dz / d * min;
+  // From move/block: start a dodge, attack or jump, else settle on move/block.
+  #chooseAction(cmd, mx, mz, fx, fz, rx, rz, camFacing) {
+    if (this.dodgeBuffer > 0 && this.grounded && this.stamina >= D.staminaCost) {
+      const d = this.dodgeInput;
+      this.dodgeDir.set(fx * d.y + rx * d.x, 0, fz * d.y + rz * d.x).normalize();
+      this.#spend(D.staminaCost);
+      this.dodgeBuffer = 0;
+      this.#setState('dodge');
+      return;
     }
+    if (this.attackBuffer > 0 && this.grounded) {
+      this.#spend(A.staminaCost);
+      this.attackBuffer = 0;
+      this.struck = false;
+      const moving = Math.hypot(mx, mz) > 0.3;
+      const base = moving ? Math.atan2(mx, mz) : camFacing;
+      this.attackFacing = this.#autoAim(base, AIM.range, AIM.arc, null) ?? this.#autoAim(base, AIM.closeRange, Math.PI);
+      this.#setState('attack');
+      return;
+    }
+    if (cmd.jump && this.grounded && this.stamina >= J.staminaCost) {
+      this.#spend(J.staminaCost);
+      this.vy = J.velocity;
+      this.grounded = false;
+    }
+    const want = cmd.block && this.grounded ? 'block' : 'move';
+    if (want !== this.state) this.#setState(want);
+  }
+
+  // Snap the swing toward the nearest enemy roughly in front (helps a lot on phones).
+  // Returns `fallback` when nothing is in range.
+  #autoAim(base, range, arc, fallback = base) {
+    const probe = { pos: this.pos, facing: base };
+    let best = null, bestD = Infinity;
+    for (const e of this.entities) {
+      if (!e.alive || e.team === this.team) continue;
+      if (!inArc(probe, e, range + e.radius, arc)) continue;
+      const d = this.pos.distanceToSquared(e.pos);
+      if (d < bestD) { bestD = d; best = e; }
+    }
+    return best ? Math.atan2(best.pos.x - this.pos.x, best.pos.z - this.pos.z) : fallback;
+  }
+
+  #regen(dt) {
+    this.staminaDelay -= dt;
+    if (this.staminaDelay <= 0) {
+      const mul = this.state === 'block' ? S.blockRegenMul : 1;
+      this.stamina = Math.min(this.maxStamina, this.stamina + S.staminaRegen * mul * dt);
+    }
+    this.sinceHit += dt;
+    if (this.sinceHit > S.healthRegenDelay) this.hp = Math.min(this.maxHp, this.hp + S.healthRegen * dt);
+  }
+
+  // Called by combat after damage is applied.
+  onHit({ attacker, blocked }) {
+    this.sinceHit = 0;
+    if (blocked) {
+      const broke = this.stamina < B.staminaPerHit;
+      this.#spend(B.staminaPerHit);
+      if (broke) this.#stagger(attacker, CB.stagger.guardBreak);
+      return;
+    }
+    this.flash.trigger();
+    if (this.state !== 'attack') this.#stagger(attacker, CB.stagger.player);   // swings aren't interrupted
+  }
+
+  #stagger(attacker, time) {
+    this.#setState('stagger');
+    this.staggerTime = time;
+    const dx = this.pos.x - attacker.pos.x, dz = this.pos.z - attacker.pos.z, d = Math.hypot(dx, dz) || 1;
+    this.vel.x = dx / d * CB.stagger.knockback;
+    this.vel.z = dz / d * CB.stagger.knockback;
+  }
+
+  die() {
+    this.alive = false;
+    this.#setState('dead');
   }
 
   // Render-time: interpolate between fixed steps and animate.
   render(alpha, out) {
     out.lerpVectors(this.prevPos, this.pos, alpha);
-    let df = this.facing - this.prevFacing;
-    df = Math.atan2(Math.sin(df), Math.cos(df));
     const { root, body, legs, arms, shadow } = this.model;
     root.position.copy(out);
-    root.rotation.y = this.prevFacing + df * alpha;
+    root.rotation.y = lerpAngle(this.prevFacing, this.facing, alpha);
 
-    const swing = Math.sin(this.walkPhase) * Math.min(1, this.speed / P.walkSpeed) * 0.7;
-    legs[0].rotation.x = swing; legs[1].rotation.x = -swing;
-    arms[0].rotation.x = -swing * 0.8; arms[1].rotation.x = swing * 0.8;
-    body.position.y = Math.abs(Math.cos(this.walkPhase)) * 0.05 * Math.min(1, this.speed / P.walkSpeed);
+    const walk = Math.min(1, this.speed / P.walkSpeed);
+    const swing = Math.sin(this.walkPhase) * walk * 0.7;
+    const [armR, armL] = arms;
+    legs[0].rotation.set(swing, 0, 0); legs[1].rotation.set(-swing, 0, 0);
+    armR.rotation.set(-0.45 - swing * 0.3, 0, 0);
+    armL.rotation.set(swing * 0.8, 0, 0);
+    body.rotation.set(0, 0, 0);
+    body.position.y = Math.abs(Math.cos(this.walkPhase)) * 0.05 * walk;
 
-    shadow.position.set(out.x, out.y + 0.05, out.z);
+    const t = this.stateTime;
+    switch (this.state) {
+      case 'attack': {
+        if (t < A.windup) {
+          armR.rotation.x = lerp(-0.45, -2.7, clamp01(t / A.windup));
+        } else {
+          const k = clamp01((t - A.windup) / (A.recover * 0.35));
+          const back = clamp01((t - A.windup - A.recover * 0.5) / (A.recover * 0.5));
+          armR.rotation.x = lerp(lerp(-2.7, -1.0, 1 - (1 - k) * (1 - k)), -0.45, back);
+          body.rotation.x = 0.18 * (1 - back);
+        }
+        break;
+      }
+      case 'block':
+        armR.rotation.set(-1.4, 0, 0.8);
+        armL.rotation.set(-1.1, 0, -0.5);
+        break;
+      case 'dodge': {
+        // Lean into the dodge direction, relative to facing
+        const f = this.facing, k = Math.sin(clamp01(t / D.duration) * Math.PI);
+        const fwd = this.dodgeDir.x * Math.sin(f) + this.dodgeDir.z * Math.cos(f);
+        const right = this.dodgeDir.x * -Math.cos(f) + this.dodgeDir.z * Math.sin(f);
+        body.rotation.set(fwd * 0.5 * k, 0, -right * 0.5 * k);
+        body.position.y = -0.15 * k;
+        break;
+      }
+      case 'stagger':
+        body.rotation.x = -0.35 * (1 - clamp01(t / this.staggerTime));
+        break;
+      case 'dead':
+        body.rotation.x = -Math.PI / 2 * clamp01(t / 0.5);
+        body.position.y = 0.2 * clamp01(t / 0.5);
+        armR.rotation.x = -2.5; armL.rotation.x = -2.5;
+        break;
+    }
+    if (!this.grounded) { legs[0].rotation.x = 0.6; legs[1].rotation.x = -0.2; }
+
+    shadow.position.set(out.x, this.terrain.heightAt(out.x, out.z) + 0.05, out.z);
     return out;
   }
 }

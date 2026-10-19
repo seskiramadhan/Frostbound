@@ -13,6 +13,11 @@ export class ThirdPersonCamera {
     this.target = new THREE.Vector3();
     this.desired = new THREE.Vector3();
     this.snapped = false;
+    this.trauma = 0;
+  }
+
+  shake(amount) {
+    this.trauma = Math.max(this.trauma, amount);
   }
 
   look(dx, dy) {
@@ -37,5 +42,12 @@ export class ThirdPersonCamera {
     if (!this.snapped) { cam.position.copy(this.desired); this.snapped = true; }
     else cam.position.lerp(this.desired, 1 - Math.exp(-C.follow * dt));
     cam.lookAt(this.target);
+
+    if (this.trauma > 0) {
+      const a = this.trauma * this.trauma;
+      cam.rotation.z += (Math.random() * 2 - 1) * a * 0.3;
+      cam.rotation.x += (Math.random() * 2 - 1) * a * 0.2;
+      this.trauma = Math.max(0, this.trauma - CONFIG.combat.shake.decay * dt * this.trauma - dt * 0.2);
+    }
   }
 }

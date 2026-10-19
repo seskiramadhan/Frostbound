@@ -15,3 +15,6 @@ With the phone on the same Wi-Fi, open `http://<your-PC-IP>:8000`
 
 ## Deploy
 Static files only: push to GitHub and enable GitHub Pages (or drop the folder on Vercel).
+
+## Cloud sessions
+Claude Code cloud sessions can commit and push to this repo directly (tested 2026-10-19).

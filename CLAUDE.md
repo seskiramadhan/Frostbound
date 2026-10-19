@@ -22,9 +22,9 @@ Goal: feel like Skyrim in 10-minute sessions on a phone. Keep the magic, cut the
 
 ## Controls
 - **Mobile:** left joystick = move, drag right side = camera, tap = attack,
-  hold = block, swipe = dodge, buttons for shout / bow / crouch / interact
+  hold = block, swipe = dodge, buttons for jump / shout / bow / crouch / interact
 - **Desktop:** WASD move, mouse look (pointer lock), LMB attack, RMB block,
-  Space dodge, Q shout, C crouch, E interact
+  Space dodge, F jump, Q shout, C crouch, E interact
 
 ## Core mechanics
 - **Third-person camera** following the player
@@ -65,8 +65,28 @@ Goal: feel like Skyrim in 10-minute sessions on a phone. Keep the magic, cut the
 - Target length: 3–5 hours main story
 
 ## Out of scope (do NOT add)
-Voice acting, large map, crafting trees, factions, big NPC cast, multiplayer
-(possible later: co-op dragon hunt via PeerJS host relay, like Shadow District).
+Voice acting, large map, crafting trees, factions, big NPC cast,
+competitive PvP, matchmaking, accounts/servers that cost money.
+
+## Co-op (online, optional)
+- **"4 now, 10 later":** PeerJS peer-to-peer, max 4 players. The host's browser
+  is authoritative. Later a relay server (e.g. Cloudflare Durable Objects) can
+  replace PeerJS for 8–10 player dragon hunts.
+- **Transport-agnostic:** game code talks to `net/transport.js`, never to PeerJS
+  directly, so swapping PeerJS for a relay touches one file.
+- **Joining:** host gets a short room code; share it or a `?join=CODE` link.
+- **Authority:** host decides enemies, damage, deaths, loot and quest state.
+  Each player controls their own movement; guests send hits, host validates.
+- **Network-ready code (from Phase 2 on):** entities have numeric ids in a
+  registry; hits/deaths go through the event bus only; input becomes one
+  command object per tick (`{move, run, attack, block, dodge, jump}`).
+- **Co-op rules:**
+  - Slow Time slows enemies only (never other players)
+  - Menus and inventory don't pause the game while in co-op
+  - Enemy health/damage scale with player count
+  - Loot is per-player (no fighting over drops)
+  - Host's save holds world + quest progress; guests keep their own character
+    (skills, inventory) in their own localStorage
 
 ## Build phases (do in order, playable at every step)
 1. **Walking:** movement, third-person camera, terrain chunk, fog, mobile joysticks
@@ -74,6 +94,12 @@ Voice acting, large map, crafting trees, factions, big NPC cast, multiplayer
 3. **First quest:** one dungeon, loot + inventory, skill leveling, save/load
 4. **Dragons:** dragon AI + fight, word walls, the 3 shouts
 5. **Full game:** village + NPCs, main + side quests, final boss, post-game, audio, polish
+
+Co-op phases slot in between:
+- **N1 (after Phase 2):** transport + lobby (room code / `?join=`), see each other move
+- **N2 (after N1):** host runs enemies and validates hits; shared wolf fights
+- **N3 (after Phase 4):** co-op dragon hunt
+- **N4 (later):** relay server for 8–10 players
 
 Finish and test a phase before starting the next one.
 
@@ -87,6 +113,7 @@ src/
   entities/      # player, enemies, dragon, NPCs
   systems/       # combat, skills, shouts, loot, quests, save
   ui/            # HUD, inventory, quest log, menus
+  net/           # transport, protocol, session, lobby (co-op)
   audio.js       # Web Audio procedural sounds
 ```
 
