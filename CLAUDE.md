@@ -130,6 +130,7 @@ src/
   camera.js            # third-person orbit camera (pulls in at walls, shake)
   world/               # terrain, props, environment (fog/light/snow), dungeon (ASCII maps,
                        # entrances, word walls), village (Frosthollow), summit (boss arena),
+                       # monastery (High Hrothgar, the Greybeards),
                        # defenses (barricades, bell, watchtower), camp (bandits), chest, fx
   entities/            # player, creature (wolf/draugr AI) + wolfModel/draugrModel,
                        # dragon, npc (villagers), remotePlayer (co-op), model (helpers)
@@ -156,6 +157,8 @@ src/
 - **Summit** (`world/summit.js`) is an outdoor level (`outdoor: true`, snow, open sky) reached
   from the `summit` path entrance. The World-Eater is a second `Dragon` with a `look` (colour,
   scale) and `boss` options: phase 1 airborne, phase 2 (below `phase2At` health) grounded for good.
+- **Main story:** The Jarl's Summons → The Howling Den → Dragon Rising → The Way of the Voice (Greybeards,
+  High Hrothgar, Ustengrav, the Horn) → The World-Eater. Story switches live in `flags`.
 - **Post-game** (after `flags.victory`): random dragon attacks, dungeons refill with a higher
   `tier` (tougher enemies, better chests), Ice Form secret wall, New Game+ (`ng` in the save;
   keeps skills, scales enemies via `CONFIG.postGame`).

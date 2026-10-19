@@ -8,6 +8,7 @@ import { RETURN_TEXT } from './jobs.js';
 const V = CONFIG.village;
 let W = null;   // the world, for the Jarl's request (its text changes with the job)
 const jarl = w => ({ level: w.valley, pos: w.npc('jarl') });
+const greybeard = w => ({ level: w.monastery, pos: w.npc('arngeir') });
 
 // target(world) returns { level, pos } for the objective marker, or null.
 export const QUESTS = {
@@ -43,6 +44,23 @@ export const QUESTS = {
       { text: 'Report to Jarl Hrolf', done: w => w.flags.reportedDragon, target: jarl },
     ],
     reward: w => w.inventory.addGold(CONFIG.loot.dragonReward),
+  },
+  // Between Dragon Rising and the World-Eater: the Greybeards (starts after reporting the dragon)
+  wayOfTheVoice: {
+    name: 'The Way of the Voice', main: true,
+    steps: [
+      { text: 'Climb to High Hrothgar', done: w => !!w.visited.monastery,
+        target: w => ({ level: w.valley, pos: w.entrances.monastery.front }) },
+      { text: 'Speak with Master Arngeir', done: w => !!w.flags.metGreybeards, target: greybeard },
+      { text: 'Show the Greybeards your Voice', done: w => !!w.flags.voiceTested,
+        target: w => ({ level: w.monastery, pos: w.monastery.center }) },
+      { text: 'Retrieve the Horn of Jurgen Windcaller from Ustengrav', done: w => !!w.flags.hornNote,
+        target: w => ({ level: w.ustengrav, pos: w.ustengrav.markers.horn }) },
+      { text: 'Meet your mysterious friend at the Sleeping Bear', done: w => !!w.flags.hornGot,
+        target: w => ({ level: w.valley, pos: w.npc('innkeeper') }) },
+      { text: 'Bring the Horn to the Greybeards', done: w => !!w.flags.hornDelivered, target: greybeard },
+    ],
+    reward: w => w.blessVoice(),
   },
   worldEater: {
     name: 'The World-Eater', main: true,

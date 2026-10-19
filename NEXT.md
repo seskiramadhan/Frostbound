@@ -25,7 +25,8 @@ https://seskiramadhan.github.io/Frostbound/
 | Music | CC0 tracks `audio/music/boss.mp3` + `explore.mp3` (converted from the user's WAVs) | #14 |
 | Update button | Bag ↻ re-downloads every game file past the cache; "New version available" notice; build 2 | #15 |
 | Round 5 | Raids on Frosthollow + the Jarl's requests (build 3) | #17 |
-| Round 6 | Bandits (camp, archers, chief, raid wave) + enemy levels (build 4) | round-6 PR (branch `bandits`) |
+| Round 6 | Bandits (camp, archers, chief, raid wave) + enemy levels (build 4) | #18 (branch `bandits`) |
+| Round 7 | Main story: the Greybeards, The Way of the Voice, Ustengrav (build 5) | round-7 PR (branch `greybeards`, on #18) |
 
 **Story today (with round 2):** start in Frosthollow → The Jarl's Summons (talk to Jarl Hrolf) →
 The Howling Den (den, alpha, treasure, report to Jarl) → Dragon Rising (barrow, FUS word wall, dragon,
@@ -63,6 +64,17 @@ keeping the save. The start screen shows "New version available" when `version.j
 higher build than `src/version.js` `BUILD` (checked on load and every 10 min), and shows
 "Build N" at the bottom. **Bump both numbers in every PR.** Build 2 = this feature.
 Devices still on build 1 or older need one last manual refresh/cache clear to get the button.
+
+**Round 7 (built, awaiting test): the Greybeards (main story)**
+- New main quest **The Way of the Voice** between Dragon Rising and The World-Eater (old saves already on the
+  World-Eater skip it). After reporting the dragon to the Jarl, **"DOVAHKIIN!"** thunders from the mountain.
+  Steps: climb to **High Hrothgar** (`world/monastery.js`, its own outdoor level, path entrance at (-48, -108))
+  → speak with **Master Arngeir** (Borri and Einarth stay silent) → shout in the courtyard → go to
+  **Ustengrav** (new 3rd dungeon east of the valley: draugr + a Wight) → the horn's pedestal is empty, with a
+  note → meet the "friend" at the Sleeping Bear (Bera, Skyrim's Delphine twist) → bring the **Horn of
+  Jurgen Windcaller** back. Reward: the Greybeards' blessing (shout cooldowns x0.75) and the World-Eater
+  quest starts (the Jarl's "I'm ready" option is now only a fallback).
+- Protocol v8 (Ustengrav adds creatures, so entity ids shift).
 
 **Round 6 (built, awaiting test): bandits + enemy levels**
 - **Enemy levels** (`systems/levels.js`): your level = 1 + (skill levels gained, all skills) / 2, shown in the
@@ -112,7 +124,7 @@ Every PR: bump the build number, keep old saves loading, and put a short "What's
 |---|---|---|---|---|
 | **1** | **Raids on Frosthollow** (original, Minecraft-like): ✅ round 5 | **Player starts it**: ring the village bell, or take the Jarl's "Defend the village" job. Villagers hide in the longhouse. 3 waves from the forest edge: wolves → draugr → **Draugr Warlord** (boss). Fixed barricades on the village edges, repaired with gold; a watchtower for bow/fire; 2 village guards fight with you; a wave bar on screen. Win = big gold + a rare item. Lose (gentle) = a house burns and Ingrid's shop closes for a while, nothing permanent. Harder each time. Host runs it in co-op. | Medium | ✅ Built (round 5) |
 | **2** | **Jarl's requests** (bounty board, Skyrim-style radiant jobs): ✅ round 5 | Talk to the Jarl → "Any work?" → one random job at a time: clear a dungeon (refills it), hunt the wolf pack, slay a dragon over the valley, defend the village (starts a raid). Gold grows with each finished job. Shown in the quest log like other quests. | Small–medium | ✅ Built (round 5) |
-| **3** | **More Skyrim main story** (Greybeards) | A **new main quest** between Dragon Rising and The World-Eater (added as a new quest, not new steps, so saves stay valid): (a) after the first dragon, **"DOVAHKIIN!"** thunders from the mountain; (b) **"The Way of the Voice"**: climb to a High Hrothgar-style monastery halfway up the peak, where old masters test your shouts and teach a word; (c) **"The Horn"**: fetch an ancient horn from a barrow; (d) then the summit path opens. Optional: a **Dragonstone** in Bleakrock Barrow showing dragon burial sites. | Medium | **Next**, in small updates |
+| **3** | **More Skyrim main story** (Greybeards): ✅ round 7 | A **new main quest** between Dragon Rising and The World-Eater (added as a new quest, not new steps, so saves stay valid): (a) after the first dragon, **"DOVAHKIIN!"** thunders from the mountain; (b) **"The Way of the Voice"**: climb to a High Hrothgar-style monastery halfway up the peak, where old masters test your shouts and teach a word; (c) **"The Horn"**: fetch an ancient horn from a barrow; (d) then the summit path opens. Optional: a **Dragonstone** in Bleakrock Barrow showing dragon burial sites. | Medium | ✅ Built (round 7) |
 
 **Dropped by the user:** "The Raiders' Nest" fort siege. (Bandits came back in round 6.)
 **Maybe later:** blacksmith + dragon bone gear, legendary dragon, buying a house, legendary skills,

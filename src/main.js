@@ -5,12 +5,13 @@ import { Input } from './input.js';
 import { Terrain } from './world/terrain.js';
 import { buildProps } from './world/props.js';
 import { setupEnvironment, applyAmbience, Snow } from './world/environment.js';
-import { Dungeon, FROSTFANG_DEN, BLEAKROCK_BARROW, buildEntrance } from './world/dungeon.js';
+import { Dungeon, FROSTFANG_DEN, BLEAKROCK_BARROW, USTENGRAV, buildEntrance } from './world/dungeon.js';
+import { Monastery } from './world/monastery.js';
 import { Chest } from './world/chest.js';
 import { Fx } from './world/fx.js';
 import { buildVillage } from './world/village.js';
 import { Summit } from './world/summit.js';
-import { Npc, VILLAGERS } from './entities/npc.js';
+import { Npc, VILLAGERS, GREYBEARDS } from './entities/npc.js';
 import { talk } from './systems/dialogue.js';
 import { Dialog } from './ui/dialog.js';
 import { GameAudio } from './audio.js';
@@ -61,7 +62,7 @@ const props = buildProps(valley);
 scene.add(props.group);
 valley.colliders = props.colliders;
 const dungeons = {}, entrances = {};
-for (const def of [FROSTFANG_DEN, BLEAKROCK_BARROW]) {
+for (const def of [FROSTFANG_DEN, BLEAKROCK_BARROW, USTENGRAV]) {
   const d = new Dungeon(def);
   scene.add(d.group);
   dungeons[def.key] = d;
@@ -70,7 +71,7 @@ for (const def of [FROSTFANG_DEN, BLEAKROCK_BARROW]) {
   valley.colliders.push(...e.colliders);
   entrances[def.key] = e;
 }
-const { den, barrow } = dungeons;
+const { den, barrow, ustengrav } = dungeons;
 const village = buildVillage(valley);
 scene.add(village.mesh);
 valley.colliders.push(...village.colliders);
@@ -79,7 +80,12 @@ scene.add(summit.group);
 entrances.summit = buildEntrance(valley, CONFIG.dungeon.entrances.summit);
 scene.add(entrances.summit.group);
 valley.colliders.push(...entrances.summit.colliders);
-const levels = { valley, ...dungeons, summit };
+const monastery = new Monastery();            // High Hrothgar, the Greybeards' terrace
+scene.add(monastery.group);
+entrances.monastery = buildEntrance(valley, CONFIG.dungeon.entrances.monastery);
+scene.add(entrances.monastery.group);
+valley.colliders.push(...entrances.monastery.colliders);
+const levels = { valley, ...dungeons, summit, monastery };
 const snow = new Snow(scene);
 const fx = new Fx(scene);
 
@@ -134,12 +140,16 @@ tpCam.yaw = player.facing + Math.PI; // start behind the player
 const inventory = new Inventory(events);
 const skills = new Skills(events, player);
 const shouts = new Shouts(events, entities, combat, fx);
-const npcs = VILLAGERS.map(def => new Npc(scene, valley, { ...def, spots: village.spots[def.id] }));
+const npcs = [
+  ...VILLAGERS.map(def => new Npc(scene, valley, { ...def, spots: village.spots[def.id] })),
+  ...GREYBEARDS.map(def => new Npc(scene, monastery, { ...def, spots: monastery.spots[def.id] })),
+];
 const stealth = new Stealth(player, creatures, skills, () => session.role === 'guest');
 const visited = {};
 const flags = {};        // story switches set in conversations (metJarl, reportedDen, ...)
 const world = {
-  valley, den, barrow, summit, entrances, inventory, visited, flags, shouts, dragon, worldEater, huntDragon, raid,
+  valley, den, barrow, ustengrav, summit, monastery, entrances, inventory, visited, flags, shouts, dragon, worldEater, huntDragon, raid,
+  blessVoice: () => blessVoice(),
   bellPos: bell.pos, camp, banditChief, campBandits: () => campPack,
   creaturesIn: level => creatures.filter(c => c.level === level),
   valleyWolves: () => creatures.filter(c => c.level === valley && c.kind === 'wolf'),
@@ -197,8 +207,8 @@ function enterLevel(level, facing) {
   tpCam.level = level;
   tpCam.yaw = facing + Math.PI;
   tpCam.snap();
-  applyAmbience(env, level === valley ? 'valley' : level.key === 'summit' ? 'summit' : level.name, !!flags.victory);
-  snow.points.visible = level.key === 'summit' || (level === valley && !flags.victory);
+  applyAmbience(env, level === valley ? 'valley' : level.outdoor ? 'summit' : level.name, !!flags.victory);
+  snow.points.visible = !!level.outdoor || (level === valley && !flags.victory);
   if (level.key) visited[level.key] = true;
   if (dungeons[level.key]) maybeRefillDungeon(level);
 }
@@ -246,6 +256,37 @@ function openCampChest() {
   save();
 }
 
+// ---- The Way of the Voice (the Greybeards) ----
+function readHornNote() {
+  flags.hornNote = true;
+  inventory.add('strangeNote');
+  hud.announce('The horn is gone!', 'A note lies in its place: "Dragonborn, we need to talk. Find me at the Sleeping Bear in Frosthollow. A friend."');
+  save();
+}
+
+function blessVoice() {
+  flags.voiceBlessing = true;
+  shouts.cooldownMul = CONFIG.monastery.voiceBlessing;
+  hud.announce('Blessing of the Greybeards', `Your shouts recharge ${Math.round((1 - CONFIG.monastery.voiceBlessing) * 100)}% faster`);
+  quests.start('worldEater');
+}
+
+events.on('questStarted', ({ id }) => {
+  if (id !== 'wayOfTheVoice') return;
+  setTimeout(() => {                              // the summons thunders down from the mountain
+    hud.announce('DOVAHKIIN!', 'A great voice thunders down from the mountain. The Greybeards summon you.');
+    tpCam.shake(1.0);
+    audio.play('dovahkiin');
+  }, 2500);
+});
+
+events.on('shout', () => {
+  if (player.level === monastery && quests.stepText('wayOfTheVoice') === 'Show the Greybeards your Voice') {
+    flags.voiceTested = true;
+    setTimeout(() => hud.announce('The Greybeards answer', '"Dovahkiin." The mountain itself trembles. Your Voice is true.'), 800);
+  }
+});
+
 function learnWord(d, w = d.wordWall) {
   fx.soul({ x: w.pos.x, y: 1, z: w.pos.z }, player.pos, 30);
   shouts.learn(w.shout);
@@ -278,12 +319,18 @@ const interactables = [
   }),
   { level: valley, pos: entrances.summit.front, label: 'Climb to the summit',
     enabled: () => quests.has('worldEater'), use: () => travel(summit, summit.start, Math.PI) },
+  { level: valley, pos: entrances.monastery.front, label: 'Climb to High Hrothgar',
+    enabled: () => quests.has('wayOfTheVoice') || !!visited.monastery, use: () => travel(monastery, monastery.start, Math.PI) },
+  { level: monastery, pos: monastery.exit, label: 'Descend the mountain',
+    use: () => travel(valley, entrances.monastery.outside, entrances.monastery.facing) },
+  { level: ustengrav, pos: ustengrav.markers.horn, label: 'Examine the empty pedestal',
+    enabled: () => quests.stepText('wayOfTheVoice') === 'Retrieve the Horn of Jurgen Windcaller from Ustengrav', use: () => readHornNote() },
   { level: summit, pos: summit.exit, label: 'Descend the mountain',
     use: () => travel(valley, entrances.summit.outside, entrances.summit.facing) },
   ...chests.map(c => ({ level: c.level, pos: c.pos, label: 'Open chest', enabled: () => !c.opened, use: () => openChest(c) })),
   ...strongboxes.map(b => ({ level: valley, pos: b.pos, label: `Steal from ${npcs.find(n => n.id === b.owner).name}'s strongbox`,
     enabled: () => !b.opened, use: () => steal(b) })),
-  ...npcs.map(n => ({ level: valley, pos: n.pos, label: `Talk to ${n.name}`, enabled: () => !raid.active, use: () => openDialog(n) })),
+  ...npcs.map(n => ({ level: n.level, pos: n.pos, label: `Talk to ${n.name}`, enabled: () => n.level !== valley || !raid.active, use: () => openDialog(n) })),
   { level: valley, pos: campChest.pos, label: 'Open the bandits\' chest', enabled: () => !campChest.opened, use: () => openCampChest() },
   // Raids: the alarm bell, the watchtower, repairing barricades mid-raid
   { level: valley, pos: bell.pos, label: 'Ring the bell (start a raid)', enabled: () => !raidBlocker(), use: () => startRaid() },
@@ -717,6 +764,7 @@ function applySave(s) {
   jobs.load(s.jobs);
   Object.assign(visited, s.world?.visited);
   Object.assign(flags, s.flags);
+  if (flags.voiceBlessing) shouts.cooldownMul = CONFIG.monastery.voiceBlessing;
   for (const key of s.world?.chests ?? []) world.chest(key)?.open(true);
   if (s.world?.campChest) { campChest.open(true); campChest.openedAt = +s.world.campChest; }
   for (const [key, t] of Object.entries(s.world?.stolen ?? {})) {
@@ -937,8 +985,10 @@ function tick(dt, controls) {
   }
   separateBodies(entities);
 
-  // Quest flow: Dragon Rising follows The Howling Den; the dragon comes when you're back outside
+  // Quest flow: Dragon Rising follows The Howling Den; the dragon comes when you're back outside.
+  // After reporting the dragon, the Greybeards summon you (old saves already past that skip it).
   if (quests.isDone('howlingDen')) quests.start('dragonRising');
+  if (quests.isDone('dragonRising') && !quests.has('worldEater')) quests.start('wayOfTheVoice');
   if (session.role !== 'guest' && quests.stepText('dragonRising') === 'Slay the dragon' && dragon.state === 'inactive'
     && player.level === valley && player.alive) {
     if ((dragonTimer += dt) > CONFIG.dragon.arriveDelay) dragon.activate(player);
@@ -1032,7 +1082,7 @@ function frame(now) {
   }
   for (const n of npcs) {                          // villagers hide in the longhouse during a raid
     n.update(dt, player, dialog.npc === n);
-    n.model.root.visible = n.model.shadow.visible = !raid.active;
+    if (n.level === valley) n.model.root.visible = n.model.shadow.visible = !raid.active;
   }
   for (const d of Object.values(dungeons)) d.update(dt);
   if (playing) fx.update(dt * (shouts.timeScale < 1 ? 0.6 : 1));
@@ -1096,5 +1146,5 @@ window.frostbound = {
   tpCam, renderer,
   go: (level, at, facing = 0) => { player.moveTo(level, at, facing); enterLevel(level, facing); },
   dragonAttack: () => startHunt(true), get ng() { return ng; }, tiers, refills, raid, jobs, tower, bell, startRaid,
-  get raidsWon() { return raidsWon; }, combat, camp, banditChief, campChest, get playerLevel() { return pLevel(); },
+  get raidsWon() { return raidsWon; }, combat, camp, banditChief, campChest, monastery, ustengrav, get playerLevel() { return pLevel(); },
 };

@@ -285,6 +285,8 @@ export const CONFIG = {
       den: { distance: 85, angle0: 2.2, style: 'cave' },
       barrow: { distance: 100, angle0: 4.7, style: 'ruin' },
       summit: { at: [50, -106], style: 'path' },   // foot of the peak
+      monastery: { at: [-48, -108], style: 'path' }, // the Greybeards' path up the mountain
+      ustengrav: { distance: 95, angle0: 0.95, style: 'ruin' },
     },
     inside: { wanderRadius: 2, leashRadius: 30 },  // creature overrides inside dungeons
     ambient: 0.32,         // baked light where no brazier reaches
@@ -314,6 +316,8 @@ export const CONFIG = {
     warlordAxe:  { name: 'Warlord\'s Axe', type: 'weapon', damage: 27, value: 180, color: 0x9a8a70, length: 1.0 },
     ancestorBlade: { name: 'Ancestor\'s Blade', type: 'quest', value: 0 },
     jarlLetter:  { name: 'Sealed Letter', type: 'quest', value: 0 },
+    hornOfJurgen: { name: 'Horn of Jurgen Windcaller', type: 'quest', value: 0 },
+    strangeNote: { name: 'Strange Note', type: 'quest', value: 0 },
     wolfPelt:    { name: 'Wolf Pelt', type: 'misc', value: 8 },
     alphaPelt:   { name: 'Alpha Wolf Pelt', type: 'misc', value: 40 },
   },
@@ -326,6 +330,7 @@ export const CONFIG = {
     barrowHall:  { items: { huntingBow: 1, minorPotion: 2 }, gold: 30 },
     barrowCrypt: { items: { ancestorBlade: 1 }, gold: 20 },
     banditChest: { items: { healPotion: 1, minorPotion: 1 }, gold: 90 },
+    ustengravHall: { items: { healPotion: 2 }, gold: 80 },
     // Village strongboxes (stealing)
     jarlCoffer:  { items: { healPotion: 1 }, gold: 70 },
     ingridBox:   { items: { minorPotion: 2 }, gold: 45 },
@@ -462,6 +467,14 @@ export const CONFIG = {
     radius: 36,
     fog: { color: 0x59626d, near: 18, far: 115 },
     light: { hemiSky: 0x9aa6b4, hemiGround: 0x2a2e34, hemiIntensity: 1.2, sun: 0.5 },
+  },
+
+  // High Hrothgar: the Greybeards' monastery halfway up the peak (its own outdoor level)
+  monastery: {
+    name: 'High Hrothgar',
+    origin: [0, 0, 1700],
+    radius: 24,
+    voiceBlessing: 0.75,   // after The Way of the Voice: shout cooldowns x this
   },
 
   // The final boss: a Dragon with these overrides

@@ -102,6 +102,13 @@ export class Npc {
   }
 }
 
+// The Greybeards of High Hrothgar (stand in the monastery courtyard)
+export const GREYBEARDS = [
+  { id: 'arngeir', name: 'Master Arngeir', look: { tunic: 0x8c8a82, legs: 0x6e6c66, skin: 0xd2ad8c, hair: 0xe0e0da, beard: true, cloak: 0x7a7870 } },
+  { id: 'borri', name: 'Master Borri', look: { tunic: 0x86847c, legs: 0x6e6c66, skin: 0xcfa888, hair: 0xd8d8d2, beard: true } },
+  { id: 'einarth', name: 'Master Einarth', look: { tunic: 0x8a887f, legs: 0x6e6c66, skin: 0xd6b090, hair: 0xe4e4de, beard: true } },
+];
+
 // Looks for the Frosthollow villagers
 export const VILLAGERS = [
   { id: 'jarl', name: 'Jarl Hrolf', look: { tunic: 0x5a2a28, legs: 0x2e2620, skin: 0xd9b08c, hair: 0x8a7a68, beard: true, crown: true, cloak: 0x3a3f5a } },
