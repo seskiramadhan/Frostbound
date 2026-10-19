@@ -27,6 +27,14 @@ export class Inventory {
     this.events.emit('inventory');
   }
 
+  // Pay from your gold. Returns false (and spends nothing) if you can't afford it.
+  spend(amount) {
+    if (this.gold < amount) return false;
+    this.gold -= amount;
+    this.events.emit('inventory');
+    return true;
+  }
+
   addGold(amount, quiet = false) {
     this.gold += amount;
     if (!quiet) this.events.emit('goldAdded', { amount });
@@ -63,7 +71,7 @@ export class Inventory {
 
   // Grouped list for the UI: [{ type, entries: [{ id, def, count, equipped }] }]
   grouped() {
-    const order = ['weapon', 'bow', 'armor', 'potion', 'misc'];
+    const order = ['weapon', 'bow', 'armor', 'potion', 'misc', 'quest'];
     return order.map(type => ({
       type,
       entries: Object.keys(this.items).filter(id => ITEMS[id]?.type === type).map(id => ({

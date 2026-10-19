@@ -1,7 +1,7 @@
 # NEXT.md — where Frostbound stands and what's pending
 
 Read this first in a new session, then `CLAUDE.md` for the rules.
-Last updated: 2026-10-19 (round 1 of 3: announcement fix + co-op N3).
+Last updated: 2026-10-19 (round 2 of 3 built on branch `round2-village`, awaiting test/merge).
 
 ## Live now (merged to `master`, deployed to GitHub Pages)
 https://seskiramadhan.github.io/Frostbound/
@@ -15,16 +15,20 @@ https://seskiramadhan.github.io/Frostbound/
 | Co-op N1 | Rooms by 5-letter code / `?join=` link, see each other move (PeerJS, vendored) | #6 |
 | Co-op N2 | Shared fights: host runs every enemy, guests' hits validated, per-player loot | #7 |
 | Docs + fix | NEXT.md, CLAUDE.md refresh; big announcements queue (dragon soul message fix) | #8 |
-| Co-op N3 | Dragon hunts: host starts from the Co-op tab after Dragon Rising; tougher each level; gold for everyone | (this round) |
+| Co-op N3 | Dragon hunts: host starts from the Co-op tab after Dragon Rising; tougher each level; gold for everyone | #9 |
+| Phase 5a+5b | Frosthollow village, 5 NPCs + dialogue, merchant, inn, Jarl-led main story, 4 side quests, quest log | round-2 PR (branch `round2-village`, stacked on #9) |
 
-**Story today:** start in the valley → The Howling Den (den, alpha, treasure) → Dragon Rising
-(barrow, FUS word wall, dragon arrives in the valley, soul → YOL). TIID's word wall is in Frostfang Den.
-After the dragon there is no more story yet (Phase 5).
+**Story today (with round 2):** start in Frosthollow → The Jarl's Summons (talk to Jarl Hrolf) →
+The Howling Den (den, alpha, treasure, report to Jarl) → Dragon Rising (barrow, FUS word wall, dragon,
+soul → YOL, report to Jarl). TIID's word wall is in Frostfang Den. Side quests: Pelts for the Hunter (Ulf),
+The Ancestor's Blade (Sven; chest in the barrow crypt), A Letter for the Jarl and Silence the Barrow (Bera).
+After the dragon the Jarl teases the World-Eater (round 3).
 
 ## Plan agreed with the user: 3 rounds, user tests after each
 1. **Round 1 (done, awaiting test):** announcement fix + co-op N3 dragon hunts.
    User tests: co-op fight + a hunt with a friend, solo dragon difficulty, phone FPS.
-2. **Round 2:** Phase 5a village + 5b quests (merchant, NPCs, main story, side quests, quest log).
+2. **Round 2 (built, awaiting test):** Phase 5a village + 5b quests. User tests: talk to the Jarl,
+   do a side quest, buy/sell with Ingrid, rest at the inn, check the Quests tab.
 3. **Round 3:** Phase 5c final boss + ending + post-game, then 5d audio + polish.
 
 ## Pending, in suggested order
@@ -47,15 +51,16 @@ HP +30%/level, damage +15%/level, names from `CONFIG.hunt.names`; everyone prese
 `goldPerLevel × level`. Solo random dragon hunts are still Phase 5c post-game.
 
 ### 4. Phase 5 — full game (suggested split, one PR each)
-- **5a Village hub** in the flat valley centre (`terrain.flatRadius`): merchant (sell pelts, buy potions/gear — gold has no use yet), inn, a few NPCs, a Jarl/elder who gives the main quest.
-- **5b Main + side quests:** main story village → first dungeon → shouts → first dragon → peak → World-Eater; 5–6 side quests; quest log in the Bag (today the HUD only shows the first unfinished quest).
+- ✅ (round 2) **5a Village hub** in the flat valley centre (`terrain.flatRadius`): merchant (sell pelts, buy potions/gear — gold has no use yet), inn, a few NPCs, a Jarl/elder who gives the main quest.
+- ✅ (round 2) **5b Main + side quests:** main story village → first dungeon → shouts → first dragon → peak → World-Eater; 5–6 side quests; quest log in the Bag (today the HUD only shows the first unfinished quest).
 - **5c Final boss + ending + post-game:** World-Eater on the peak (`terrain.peak`), phase 1 airborne (Slow Time + bow), phase 2 grounded melee; sunny ending, NPCs say "Dragonborn"; random scaling dragon hunts, dungeon respawns with better loot, hidden 4th shout, New Game+.
 - **5d Audio + polish:** procedural Web Audio (`src/audio.js`): sword, wolves, dragon roar, shouts, wind, footsteps. Optional day/night.
 
 ### 5. Not in the game yet (from CLAUDE.md core mechanics)
 - Crouch / Sneak skill / stealth meter / sneak attacks / stealing
 - Magic: Destruction (fire) skill + Magicka bar
-- Merchant (5a), quest log (5b), 4th shout + New Game+ (5c), audio (5d)
+- 4th shout + New Game+ (5c), audio (5d)
+- Village is single-player per device in co-op: NPCs, quests and trades are local to each player
 
 ## Co-op: known gaps (fine for now, revisit in N3 / Phase 5)
 - Quests are **not shared**: each player keeps their own quest progress (kills by anyone still count where a quest checks world state, e.g. the alpha being dead).

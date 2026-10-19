@@ -261,6 +261,11 @@ export const CONFIG = {
     hideArmor:   { name: 'Hide Armor', type: 'armor', armor: 20, value: 40, color: 0x8a6440 },  // armor = % damage taken off
     huntingBow:  { name: 'Hunting Bow', type: 'bow', damage: 16, value: 50 },          // arrows are unlimited
     minorPotion: { name: 'Potion of Minor Healing', type: 'potion', heal: 35, value: 15 },
+    healPotion:  { name: 'Potion of Healing', type: 'potion', heal: 70, value: 35 },
+    ironArmor:   { name: 'Iron Armor', type: 'armor', armor: 30, value: 120, color: 0x7d838c },
+    longbow:     { name: 'Hunter\'s Longbow', type: 'bow', damage: 24, value: 110 },
+    ancestorBlade: { name: 'Ancestor\'s Blade', type: 'quest', value: 0 },
+    jarlLetter:  { name: 'Sealed Letter', type: 'quest', value: 0 },
     wolfPelt:    { name: 'Wolf Pelt', type: 'misc', value: 8 },
     alphaPelt:   { name: 'Alpha Wolf Pelt', type: 'misc', value: 40 },
   },
@@ -271,6 +276,7 @@ export const CONFIG = {
     denHall:     { items: { hideArmor: 1, minorPotion: 1 }, gold: 15 },
     denTreasure: { items: { steelSword: 1, minorPotion: 2 }, gold: 60 },
     barrowHall:  { items: { huntingBow: 1, minorPotion: 2 }, gold: 30 },
+    barrowCrypt: { items: { ancestorBlade: 1 }, gold: 20 },
     wolfDrop: 'wolfPelt',
     alphaDrop: 'alphaPelt',
     questReward: 50,       // gold for finishing the first quest
@@ -340,6 +346,19 @@ export const CONFIG = {
     crashStagger: 4,       // seconds stunned after Unrelenting Force knocks it down
     deathTime: 2.5,
     soulTime: 3.5,
+  },
+
+  // Frosthollow, the village in the flat valley centre (around the player spawn)
+  village: {
+    name: 'Frosthollow',
+    roomPrice: 10,         // inn: rest to full health
+    sellRate: 1,           // merchant pays value x sellRate
+    stock: [               // merchant: [item, price]
+      ['minorPotion', 30], ['healPotion', 70], ['steelSword', 160], ['hideArmor', 90],
+      ['ironArmor', 260], ['huntingBow', 110], ['longbow', 240],
+    ],
+    rewards: { pelts: 60, blade: 120, letter: 40, barrow: 100, report: 75 },
+    peltsWanted: 3,
   },
 
   // Co-op dragon hunts (N3): each hunt level makes the next dragon tougher.

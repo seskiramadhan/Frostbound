@@ -8,6 +8,10 @@ import { setupEnvironment, applyAmbience, Snow } from './world/environment.js';
 import { Dungeon, FROSTFANG_DEN, BLEAKROCK_BARROW, buildEntrance } from './world/dungeon.js';
 import { Chest } from './world/chest.js';
 import { Fx } from './world/fx.js';
+import { buildVillage } from './world/village.js';
+import { Npc, VILLAGERS } from './entities/npc.js';
+import { talk } from './systems/dialogue.js';
+import { Dialog } from './ui/dialog.js';
 import { Player } from './entities/player.js';
 import { spawnWolfPack, spawnDungeonCreatures } from './entities/creature.js';
 import { Dragon } from './entities/dragon.js';
@@ -56,6 +60,9 @@ for (const def of [FROSTFANG_DEN, BLEAKROCK_BARROW]) {
   entrances[def.key] = e;
 }
 const { den, barrow } = dungeons;
+const village = buildVillage(valley);
+scene.add(village.mesh);
+valley.colliders.push(...village.colliders);
 const levels = { valley, ...dungeons };
 const snow = new Snow(scene);
 const fx = new Fx(scene);
@@ -82,10 +89,13 @@ tpCam.yaw = player.facing + Math.PI; // start behind the player
 const inventory = new Inventory(events);
 const skills = new Skills(events, player);
 const shouts = new Shouts(events, entities, combat, fx);
+const npcs = VILLAGERS.map(def => new Npc(scene, valley, { ...def, spots: village.spots[def.id] }));
 const visited = {};
+const flags = {};        // story switches set in conversations (metJarl, reportedDen, ...)
 const world = {
-  valley, den, barrow, entrances, inventory, visited, shouts, dragon, alpha: bosses.den,
+  valley, den, barrow, entrances, inventory, visited, flags, shouts, dragon, alpha: bosses.den, wight: bosses.barrow,
   chest: key => chests.find(c => c.key === key),
+  npc: id => npcs.find(n => n.id === id).pos,
 };
 const quests = new Quests(events, world);
 
@@ -97,7 +107,8 @@ const session = new Session({
 const coopPanel = new CoopPanel(session, {
   blocker: () => huntBlocker(), start: () => startHunt(), level: () => huntsWon + 1, active: () => huntDragon.active,
 });
-const menu = new Menu(inventory, skills, player, shouts, coopPanel);
+const menu = new Menu(inventory, skills, player, shouts, coopPanel, quests);
+const dialog = new Dialog();
 const input = new Input(renderer.domElement, $('joy'), $('joy-knob'), {
   jump: $('btn-jump'), interact: $('btn-interact'), menu: $('btn-bag'), shout: $('btn-shout'), bow: $('btn-bow'),
 });
@@ -157,6 +168,7 @@ const interactables = [
     return list;
   }),
   ...chests.map(c => ({ level: c.level, pos: c.pos, label: 'Open chest', enabled: () => !c.opened, use: () => openChest(c) })),
+  ...npcs.map(n => ({ level: valley, pos: n.pos, label: `Talk to ${n.name}`, use: () => openDialog(n) })),
 ];
 
 function nearestInteractable() {
@@ -323,6 +335,7 @@ function save() {
   if (resetting || !started || !player.alive) return;
   writeSave({
     hunts: huntsWon,
+    flags,
     player: { level: player.level.key ?? 'valley', pos: player.pos.toArray(), facing: player.facing, hp: player.hp, bowMode: player.bowMode },
     inventory: inventory.toJSON(),
     skills: skills.toJSON(),
@@ -339,6 +352,7 @@ function applySave(s) {
   huntsWon = Math.max(0, s.hunts | 0);
   quests.load(s.quests);
   Object.assign(visited, s.world?.visited);
+  Object.assign(flags, s.flags);
   for (const key of s.world?.chests ?? []) world.chest(key)?.open(true);
   for (const key of s.world?.dead ?? []) creatures.find(w => w.key === key)?.removeForGood();
   if (s.world?.dragonDead) dragon.setDead();
@@ -363,7 +377,7 @@ let started = false;
 function startGame(lock = true) {
   if (!started) {
     started = true;
-    quests.start('howlingDen');   // no-op when loaded from a save
+    if (!quests.has('howlingDen')) quests.start('arrival');   // new game: meet the Jarl first
   }
   if (IS_TOUCH) {
     hud.showOverlay(false);
@@ -391,8 +405,62 @@ $('newgame').addEventListener('click', e => {
   location.reload();
 });
 
+// ---- Villagers: talk, trade, rest ----
+const VIL = CONFIG.village;
+const talkCtx = {
+  quests, inventory, flags, player,
+  done: line => dialog.say(line),
+  trade: () => { tradeMode = true; },
+  rest: () => {
+    if (!inventory.spend(VIL.roomPrice)) { dialog.say('You can\'t afford a room.'); return true; }
+    player.heal(player.maxHp);
+    player.stamina = player.maxStamina;
+    hud.toast(`Rested at the inn (-${VIL.roomPrice} gold). Fully healed.`);
+    save();
+    return false;
+  },
+};
+let tradeMode = false;
+
+function tradeView() {
+  const opts = [{ label: 'Buy', cls: 'head', run: () => true, disabled: true }];
+  for (const [id, price] of VIL.stock) {
+    opts.push({ label: ITEMS[id].name, note: `${price} g`, disabled: inventory.gold < price, run: () => {
+      if (inventory.spend(price)) { inventory.add(id, 1, true); hud.toast(`Bought ${ITEMS[id].name}`); save(); }
+      return true;
+    } });
+  }
+  opts.push({ label: 'Sell', cls: 'head', run: () => true, disabled: true });
+  for (const g of inventory.grouped()) {
+    for (const e of g.entries) {
+      if (e.def.type === 'quest' || !e.def.value || (e.equipped && e.count <= 1)) continue;
+      const price = Math.round(e.def.value * VIL.sellRate);
+      opts.push({ label: `${e.def.name}${e.count > 1 ? ` (${e.count})` : ''}`, note: `+${price} g`, run: () => {
+        inventory.remove(e.id);
+        inventory.addGold(price, true);
+        hud.toast(`Sold ${e.def.name} for ${price} gold`);
+        return true;
+      } });
+    }
+  }
+  opts.push({ label: 'Done trading', run: () => { tradeMode = false; save(); return true; } });
+  return { text: `You have ${inventory.gold} gold.`, options: opts };
+}
+
+function openDialog(npc) {
+  if (dialog.open || menu.open) return;
+  tradeMode = false;
+  dialog.show(npc, () => (tradeMode ? tradeView() : talk(npc.id, talkCtx)));
+  if (!IS_TOUCH) document.exitPointerLock?.();
+}
+dialog.onClose = () => {
+  tradeMode = false;
+  save();
+  if (!IS_TOUCH) { hud.showOverlay(true); input.requestLock(); }
+};
+
 function openMenu(tab) {
-  if (!started || menu.open || !player.alive) return;
+  if (!started || menu.open || dialog.open || !player.alive) return;
   menu.show(true, tab);
   if (!IS_TOUCH) document.exitPointerLock?.();
 }
@@ -402,9 +470,9 @@ function closeMenu() {
   if (!IS_TOUCH) { hud.showOverlay(true); input.requestLock(); }   // overlay hides once the lock is back
 }
 input.onMenu = () => (menu.open ? closeMenu() : openMenu());
-input.onEscape = closeMenu;
+input.onEscape = () => (dialog.open ? dialog.close() : closeMenu());
 menu.onClose = closeMenu;
-input.onLockChange = locked => { if (!menu.open) hud.showOverlay(!locked); };
+input.onLockChange = locked => { if (!menu.open && !dialog.open) hud.showOverlay(!locked); };
 
 addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 addEventListener('pagehide', save);
@@ -467,7 +535,7 @@ function frame(now) {
   last = now;
 
   // Single player pauses in menus; co-op never pauses
-  const controls = input.active && !menu.open;
+  const controls = input.active && !menu.open && !dialog.open;
   const playing = started && (controls || session.active);
   if (playing) {
     const look = input.consumeLook();
@@ -489,6 +557,7 @@ function frame(now) {
   dragon.render(alpha);
   huntDragon.render(alpha);
   for (const c of chests) c.update(dt);
+  for (const n of npcs) n.update(dt, player, dialog.npc === n);
   for (const d of Object.values(dungeons)) d.update(dt);
   if (playing) fx.update(dt * (shouts.timeScale < 1 ? 0.6 : 1));
   session.render(dt, player.level.key ?? 'valley', levels);
@@ -534,7 +603,7 @@ addEventListener('resize', () => {
 
 // Debug handle for testing in the console
 window.frostbound = {
-  player, creatures, dragon, huntDragon, entities, events, inventory, skills, shouts, quests, chests, dungeons, den, barrow,
+  player, creatures, dragon, huntDragon, entities, npcs, dialog, flags, village, events, inventory, skills, shouts, quests, chests, dungeons, den, barrow,
   valley, entrances, interactables, projectiles, fx, save, menu, session, coopPanel,
   tpCam,
   go: (level, at, facing = 0) => { player.moveTo(level, at, facing); enterLevel(level, facing); },
