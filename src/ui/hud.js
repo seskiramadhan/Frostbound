@@ -51,8 +51,8 @@ export class Hud {
     this.acc = 0;
   }
 
-  setStartText(hasSave) {
-    $('cta').textContent = `${IS_TOUCH ? 'Tap' : 'Click'} to ${hasSave ? 'continue' : 'begin'}`;
+  setStartText(hasSave, note = '') {
+    $('cta').textContent = `${IS_TOUCH ? 'Tap' : 'Click'} to ${hasSave ? 'continue' : 'begin'}${note ? ` · ${note}` : ''}`;
     $('newgame').style.display = hasSave ? 'inline-block' : 'none';
   }
 
@@ -172,6 +172,14 @@ export class Hud {
     if (!entity) return;
     if (this.bossName.textContent !== entity.name) this.bossName.textContent = entity.name;
     this.bossBar.style.transform = `scaleX(${Math.min(1, Math.max(0, entity.hp) / entity.maxHp)})`;
+  }
+
+  // Victory card; onContinue runs when it is dismissed.
+  showEnding(onContinue) {
+    const el = $('ending');
+    el.style.display = 'flex';
+    const btn = $('ending-continue');
+    btn.onclick = e => { e.stopPropagation(); el.style.display = 'none'; onContinue?.(); };
   }
 
   // Fade to black, run fn, fade back in.

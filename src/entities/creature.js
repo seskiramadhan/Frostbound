@@ -210,6 +210,12 @@ export class Creature {
     if (this.state !== 'bite') this.knockback(attacker.pos, CB.stagger.knockback, CB.stagger.enemy);
   }
 
+  // Ice Form: frozen in place (a long stagger) with a frosty tint.
+  freeze(time) {
+    this.knockback(this.pos, 0, time);
+    this.flash.trigger(0x3070ff);
+  }
+
   // Shoved away from `from` (Unrelenting Force, sword hits) and staggered for `time`.
   knockback(from, force, time) {
     if (!this.alive) return;

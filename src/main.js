@@ -9,9 +9,11 @@ import { Dungeon, FROSTFANG_DEN, BLEAKROCK_BARROW, buildEntrance } from './world
 import { Chest } from './world/chest.js';
 import { Fx } from './world/fx.js';
 import { buildVillage } from './world/village.js';
+import { Summit } from './world/summit.js';
 import { Npc, VILLAGERS } from './entities/npc.js';
 import { talk } from './systems/dialogue.js';
 import { Dialog } from './ui/dialog.js';
+import { GameAudio } from './audio.js';
 import { Player } from './entities/player.js';
 import { spawnWolfPack, spawnDungeonCreatures } from './entities/creature.js';
 import { Dragon } from './entities/dragon.js';
@@ -63,7 +65,12 @@ const { den, barrow } = dungeons;
 const village = buildVillage(valley);
 scene.add(village.mesh);
 valley.colliders.push(...village.colliders);
-const levels = { valley, ...dungeons };
+const summit = new Summit();
+scene.add(summit.group);
+entrances.summit = buildEntrance(valley, CONFIG.dungeon.entrances.summit);
+scene.add(entrances.summit.group);
+valley.colliders.push(...entrances.summit.colliders);
+const levels = { valley, ...dungeons, summit };
 const snow = new Snow(scene);
 const fx = new Fx(scene);
 
@@ -80,7 +87,9 @@ for (const d of Object.values(dungeons)) {
   bosses[d.key] = r.boss;
 }
 const dragon = entities.add(new Dragon(scene, valley, events, fx, entities));          // the story dragon
-const huntDragon = entities.add(new Dragon(scene, valley, events, fx, entities));      // co-op dragon hunts
+const huntDragon = entities.add(new Dragon(scene, valley, events, fx, entities));      // dragon hunts / attacks
+const WE = CONFIG.worldEater;
+const worldEater = entities.add(new Dragon(scene, summit, events, fx, entities, { scale: WE.scale, colors: WE.colors }));
 const chests = Object.values(dungeons).flatMap(d => d.chests.map(c => new Chest(scene, d, c.pos, c.lootKey, Math.PI)));
 const projectiles = new Projectiles(scene, entities, combat);
 const tpCam = new ThirdPersonCamera(camera, valley);
@@ -93,7 +102,8 @@ const npcs = VILLAGERS.map(def => new Npc(scene, valley, { ...def, spots: villag
 const visited = {};
 const flags = {};        // story switches set in conversations (metJarl, reportedDen, ...)
 const world = {
-  valley, den, barrow, entrances, inventory, visited, flags, shouts, dragon, alpha: bosses.den, wight: bosses.barrow,
+  valley, den, barrow, summit, entrances, inventory, visited, flags, shouts, dragon, worldEater,
+  alpha: bosses.den, wight: bosses.barrow, summitCentre: new THREE.Vector3(summit.ox, 0, summit.oz),
   chest: key => chests.find(c => c.key === key),
   npc: id => npcs.find(n => n.id === id).pos,
 };
@@ -102,13 +112,17 @@ const quests = new Quests(events, world);
 const hud = new Hud();
 const session = new Session({
   events, scene, player, inventory, entities, combat, shouts, levels, dragon,
-  enemies: [...creatures, dragon, huntDragon], onHurt: guestHurt,
+  enemies: [...creatures, dragon, huntDragon, worldEater], onHurt: guestHurt,
 });
 const coopPanel = new CoopPanel(session, {
   blocker: () => huntBlocker(), start: () => startHunt(), level: () => huntsWon + 1, active: () => huntDragon.active,
 });
 const menu = new Menu(inventory, skills, player, shouts, coopPanel, quests);
 const dialog = new Dialog();
+const audio = new GameAudio();
+const SOUND_LABEL = { all: '♪ On', sfx: '♪ FX only', off: '♪ Off' };
+$('menu-sound').textContent = SOUND_LABEL[audio.pref];
+$('menu-sound').addEventListener('click', () => { $('menu-sound').textContent = SOUND_LABEL[audio.cyclePref()]; });
 const input = new Input(renderer.domElement, $('joy'), $('joy-knob'), {
   jump: $('btn-jump'), interact: $('btn-interact'), menu: $('btn-bag'), shout: $('btn-shout'), bow: $('btn-bow'),
 });
@@ -117,6 +131,7 @@ const input = new Input(renderer.domElement, $('joy'), $('joy-knob'), {
 let busy = false;   // fading between levels
 function travel(level, at, facing) {
   busy = true;
+  audio.play('door');
   hud.fade(() => {
     player.moveTo(level, at, facing);
     enterLevel(level, facing);
@@ -126,27 +141,32 @@ function travel(level, at, facing) {
 }
 
 function enterLevel(level, facing) {
+  const outdoors = level === valley || level.outdoor;
+  audio.setAmbience(outdoors ? 'valley' : 'dungeon');
   tpCam.level = level;
   tpCam.yaw = facing + Math.PI;
   tpCam.snap();
-  applyAmbience(env, level.name);
-  snow.points.visible = level === valley;
+  applyAmbience(env, level === valley ? 'valley' : level.key === 'summit' ? 'summit' : level.name, !!flags.victory);
+  snow.points.visible = level.key === 'summit' || (level === valley && !flags.victory);
   if (level.key) visited[level.key] = true;
+  if (dungeons[level.key]) maybeRefillDungeon(level);
 }
 
 function openChest(chest) {
   chest.open();
-  const loot = CONFIG.loot[chest.lootKey];
+  audio.play('chest');
+  const tl = CONFIG.postGame.tierLoot;
+  const loot = chest.tier ? { items: tl.items, gold: tl.goldPerTier * chest.tier } : CONFIG.loot[chest.lootKey];
   for (const [id, n] of Object.entries(loot.items)) inventory.add(id, n);
   if (loot.gold) inventory.addGold(loot.gold);
   save();
 }
 
-function learnWord(d) {
-  const w = d.wordWall;
+function learnWord(d, w = d.wordWall) {
   fx.soul({ x: w.pos.x, y: 1, z: w.pos.z }, player.pos, 30);
   shouts.learn(w.shout);
-  d.setWordLearned(true);
+  if (w === d.secretWall) d.setSecretState(true, true);
+  else d.setWordLearned(true);
   const other = Object.values(dungeons).find(o => o.wordWall && !shouts.known.has(o.wordWall.shout));
   if (other) setTimeout(() => hud.toast(`Legends tell of another word wall in ${other.name}`), 3500);
   save();
@@ -165,8 +185,17 @@ const interactables = [
       list.push({ level: d, pos: d.wordWall.pos, label: `Learn the word: ${def.word}`,
         enabled: () => !shouts.known.has(d.wordWall.shout), use: () => learnWord(d) });
     }
+    if (d.secretWall) {   // hidden 4th shout: only after the World-Eater falls
+      const def = CONFIG.shouts[d.secretWall.shout];
+      list.push({ level: d, pos: d.secretWall.pos, label: `Learn the word: ${def.word}`,
+        enabled: () => !!flags.victory && !shouts.known.has(d.secretWall.shout), use: () => learnWord(d, d.secretWall) });
+    }
     return list;
   }),
+  { level: valley, pos: entrances.summit.front, label: 'Climb to the summit',
+    enabled: () => quests.has('worldEater'), use: () => travel(summit, summit.start, Math.PI) },
+  { level: summit, pos: summit.exit, label: 'Descend the mountain',
+    use: () => travel(valley, entrances.summit.outside, entrances.summit.facing) },
   ...chests.map(c => ({ level: c.level, pos: c.pos, label: 'Open chest', enabled: () => !c.opened, use: () => openChest(c) })),
   ...npcs.map(n => ({ level: valley, pos: n.pos, label: `Talk to ${n.name}`, use: () => openDialog(n) })),
 ];
@@ -255,10 +284,42 @@ events.on('netEnded', ({ reason, wasGuest }) => {
     hud.fade(() => location.reload(), 1.2);
   }
 });
-events.on('dragonRoar', () => { hud.announce('A dragon approaches!'); tpCam.shake(0.45); });
+events.on('dragonRoar', ({ dragon: d }) => {
+  if (d === worldEater) {
+    hud.announce('The World-Eater!', 'Bow and Slow Time while it flies. FUS or IIZ bring it down.');
+    tpCam.shake(0.7);
+  } else {
+    hud.announce('A dragon approaches!');
+    tpCam.shake(0.45);
+  }
+  audio.play('roar');
+});
+events.on('bossPhase2', () => { hud.announce('The World-Eater is forced down!', 'Finish it!'); tpCam.shake(0.8); audio.play('thud'); });
+
+// ---- Sound effects from game events ----
+events.on('attack', ({ attacker }) => {
+  if (attacker === player) audio.play('swing');
+  else if (attacker.kind === 'wolf') audio.play('bite', attacker.pos);
+  else if (attacker.kind === 'draugr') audio.play('heavySwing', attacker.pos);
+  else if (attacker.kind === 'dragon') audio.play('bite', attacker.pos);
+});
+events.on('damage', ({ target, source }) => {
+  if (target === player) audio.play('hurt');
+  else audio.play(source === 'arrow' ? 'arrowHit' : 'hit', target.pos);
+});
+events.on('blocked', ({ target }) => audio.play('block', target.pos));
+events.on('shootArrow', () => audio.play('bow'));
+events.on('shout', ({ id }) => audio.play(id));
+events.on('dragonDowned', ({ dragon: d }) => audio.play('thud', d?.pos));
+events.on('skillUp', () => audio.play('levelUp'));
+events.on('questDone', () => audio.play('quest'));
+events.on('questStarted', () => audio.play('questStart'));
+events.on('shoutLearned', () => audio.play('word'));
+events.on('death', ({ target }) => { if (target === player) audio.play('death'); });
 events.on('dragonDowned', () => hud.toast('The dragon crashes to the ground!'));
 events.on('dragonDead', ({ dragon: d }) => {
   if (d === huntDragon) { huntWon(); return; }
+  if (d === worldEater) { victory(); return; }
   dragon.char();
   shouts.learn('fireBreath', true);
   shouts.select('fireBreath');
@@ -279,15 +340,16 @@ function huntBlocker() {
   return null;
 }
 
-function startHunt() {
-  if (huntBlocker()) return;
+function startHunt(attack = false) {
+  if (!attack && huntBlocker()) return;
   const level = huntsWon + 1;
   const data = {
     level,
     name: HUNT.names[Math.min(level - 1, HUNT.names.length - 1)],
-    maxHp: Math.round(CONFIG.dragon.maxHealth * (1 + HUNT.hpPerLevel * (level - 1))),
+    maxHp: Math.round(CONFIG.dragon.maxHealth * (1 + HUNT.hpPerLevel * (level - 1)) * ngHp()),
+    attack,
   };
-  huntDragon.activate(player, { name: data.name, maxHp: data.maxHp, dmgMul: 1 + HUNT.dmgPerLevel * (level - 1) });
+  huntDragon.activate(player, { name: data.name, maxHp: data.maxHp, dmgMul: (1 + HUNT.dmgPerLevel * (level - 1)) * ngDmg() });
   events.emit('huntStart', { dragon: huntDragon, data });
 }
 
@@ -295,7 +357,7 @@ events.on('huntStart', ({ data }) => {
   huntDragon.name = data.name;          // guests learn the name/health from the host
   huntDragon.maxHp = data.maxHp;
   huntDragon.huntLevel = data.level;
-  hud.announce('Dragon hunt!', `${data.name} (level ${data.level}) is coming`);
+  hud.announce(data.attack ? 'A dragon attacks!' : 'Dragon hunt!', `${data.name} (level ${data.level}) is coming`);
   if (menu.open) menu.render();
 });
 
@@ -306,6 +368,60 @@ function huntWon() {
   hud.announce(`${huntDragon.name} slain!`, `Hunt reward: ${gold} gold`);
   inventory.addGold(gold);
   save();
+}
+
+// ---- The World-Eater and the ending ----
+let weTimer = 0;
+function victory() {
+  worldEater.char();
+  flags.victory = true;
+  hud.announce('The World-Eater is no more', 'Its soul is yours, Dragonborn');
+  save();
+  setTimeout(() => hud.fade(() => {
+    player.moveTo(valley, SPAWN, Math.PI);
+    enterLevel(valley, Math.PI);
+    hud.showEnding(() => {
+      hud.toast('Post-game: dragons still roam, dungeons refill, and a hidden word wall stirs in Bleakrock Barrow.');
+      hud.toast('Talk to Jarl Hrolf to begin New Game+.');
+    });
+    save();
+  }, 1.2), 4500);
+}
+
+// ---- Post-game & New Game+ ----
+const PG = CONFIG.postGame;
+let ng = 0;                    // New Game+ level (enemies tougher)
+const tiers = {}, refills = {}; // per dungeon: respawn tier, last refill time (ms)
+const ngHp = () => 1 + PG.ngHp * ng;
+const ngDmg = () => 1 + PG.ngDmg * ng;
+let attackTimer = PG.dragonEvery[0];
+
+// Scale a creature for NG+ and its dungeon's respawn tier (from its original stats).
+function scaleCreature(c) {
+  c.baseCfg ??= { ...c.cfg };
+  const tier = tiers[c.level.key] ?? 0;
+  const hp = ngHp() * (1 + PG.tierHp * tier), dmg = ngDmg() * (1 + PG.tierDmg * tier);
+  c.cfg = { ...c.baseCfg, maxHealth: c.baseCfg.maxHealth * hp, biteDamage: c.baseCfg.biteDamage * dmg };
+  c.maxHp = c.cfg.maxHealth;
+  if (c.alive) c.hp = Math.min(c.hp, c.maxHp) || c.maxHp;
+}
+
+// After victory: a cleared dungeon refills (tougher, better loot) when you come back later.
+function maybeRefillDungeon(d) {
+  if (!flags.victory || session.role === 'guest') return;
+  const mine = creatures.filter(c => c.level === d);
+  if (mine.some(c => c.alive) || Date.now() - (refills[d.key] ?? 0) < PG.dungeonRespawn * 1000) return;
+  tiers[d.key] = (tiers[d.key] ?? 0) + 1;
+  refills[d.key] = Date.now();
+  for (const c of mine) { scaleCreature(c); c.respawns = false; c.respawn(); }
+  for (const ch of chests) if (ch.level === d) { ch.opened = false; ch.openT = 0; ch.tier = tiers[d.key]; }
+  hud.toast(`${d.name} has new occupants... and new treasure`);
+}
+
+function newGamePlus() {
+  resetting = true;
+  writeSave({ ng: ng + 1, hunts: huntsWon, skills: skills.toJSON(), shouts: { known: [], selected: null } });
+  hud.fade(() => location.reload(), 0.8);
 }
 
 // Co-op guest: an enemy (run by the host) hit us. Apply it with our own armour and block skill.
@@ -326,14 +442,18 @@ let guestWorld = null;   // while a co-op guest: our own world, kept as it was b
 function worldJSON() {
   return {
     chests: chests.filter(c => c.opened).map(c => c.key),
+    chestTiers: Object.fromEntries(chests.filter(c => c.tier).map(c => [c.key, c.tier])),
     dead: creatures.filter(w => w.key && !w.alive).map(w => w.key),
     dragonDead: dragon.state === 'dead',
+    worldEaterDead: worldEater.state === 'dead',
+    tiers, refills,
     visited,
   };
 }
 function save() {
   if (resetting || !started || !player.alive) return;
   writeSave({
+    ng,
     hunts: huntsWon,
     flags,
     player: { level: player.level.key ?? 'valley', pos: player.pos.toArray(), facing: player.facing, hp: player.hp, bowMode: player.bowMode },
@@ -350,12 +470,18 @@ function applySave(s) {
   skills.load(s.skills);
   shouts.load(s.shouts);
   huntsWon = Math.max(0, s.hunts | 0);
+  ng = Math.max(0, s.ng | 0);
+  Object.assign(tiers, s.world?.tiers);
+  Object.assign(refills, s.world?.refills);
+  for (const [key, t] of Object.entries(s.world?.chestTiers ?? {})) { const c = world.chest(key); if (c) c.tier = t; }
+  for (const c of creatures) scaleCreature(c);   // NG+ and refill tiers
   quests.load(s.quests);
   Object.assign(visited, s.world?.visited);
   Object.assign(flags, s.flags);
   for (const key of s.world?.chests ?? []) world.chest(key)?.open(true);
   for (const key of s.world?.dead ?? []) creatures.find(w => w.key === key)?.removeForGood();
   if (s.world?.dragonDead) dragon.setDead();
+  if (s.world?.worldEaterDead) worldEater.setDead();
   const level = levels[s.player?.level] ?? valley;
   const [x, , z] = s.player?.pos ?? [0, 0, 0];
   player.moveTo(level, new THREE.Vector3(x, 0, z), s.player?.facing ?? Math.PI);
@@ -366,7 +492,11 @@ function applySave(s) {
 
 const saved = loadSave();
 if (saved) applySave(saved);
-for (const d of Object.values(dungeons)) if (d.wordWall) d.setWordLearned(shouts.known.has(d.wordWall.shout));
+for (const d of Object.values(dungeons)) {
+  if (d.wordWall) d.setWordLearned(shouts.known.has(d.wordWall.shout));
+  if (d.secretWall) d.setSecretState(!!flags.victory, shouts.known.has(d.secretWall.shout));
+}
+if (ng) hud.setStartText(true, `New Game+ ${ng}`);
 applyStats(player, inventory, skills);
 hud.setStartText(!!saved);
 const joinCode = new URLSearchParams(location.search).get('join');   // invite link: ?join=CODE
@@ -375,6 +505,7 @@ if (joinCode) $('cta').textContent = `${IS_TOUCH ? 'Tap' : 'Click'} to join room
 // ---- Start / pause / menu ----
 let started = false;
 function startGame(lock = true) {
+  audio.start();   // browsers only allow sound after a tap
   if (!started) {
     started = true;
     if (!quests.has('howlingDen')) quests.start('arrival');   // new game: meet the Jarl first
@@ -408,7 +539,8 @@ $('newgame').addEventListener('click', e => {
 // ---- Villagers: talk, trade, rest ----
 const VIL = CONFIG.village;
 const talkCtx = {
-  quests, inventory, flags, player,
+  quests, inventory, flags, player, newGamePlus,
+  get ng() { return ng; },
   done: line => dialog.say(line),
   trade: () => { tradeMode = true; },
   rest: () => {
@@ -426,7 +558,7 @@ function tradeView() {
   const opts = [{ label: 'Buy', cls: 'head', run: () => true, disabled: true }];
   for (const [id, price] of VIL.stock) {
     opts.push({ label: ITEMS[id].name, note: `${price} g`, disabled: inventory.gold < price, run: () => {
-      if (inventory.spend(price)) { inventory.add(id, 1, true); hud.toast(`Bought ${ITEMS[id].name}`); save(); }
+      if (inventory.spend(price)) { inventory.add(id, 1, true); hud.toast(`Bought ${ITEMS[id].name}`); audio.play('coin'); save(); }
       return true;
     } });
   }
@@ -439,6 +571,7 @@ function tradeView() {
         inventory.remove(e.id);
         inventory.addGold(price, true);
         hud.toast(`Sold ${e.def.name} for ${price} gold`);
+        audio.play('coin');
         return true;
       } });
     }
@@ -450,6 +583,7 @@ function tradeView() {
 function openDialog(npc) {
   if (dialog.open || menu.open) return;
   tradeMode = false;
+  talkCtx.confirmNg = false;
   dialog.show(npc, () => (tradeMode ? tradeView() : talk(npc.id, talkCtx)));
   if (!IS_TOUCH) document.exitPointerLock?.();
 }
@@ -507,6 +641,7 @@ function tick(dt, controls) {
     for (const c of creatures) c.tick(edt);
     dragon.tick(edt);
     huntDragon.tick(edt);
+    worldEater.tick(edt);
   }
   projectiles.update(dt);
   shouts.update(dt);
@@ -518,9 +653,44 @@ function tick(dt, controls) {
     && player.level === valley && player.alive) {
     if ((dragonTimer += dt) > CONFIG.dragon.arriveDelay) dragon.activate(player);
   }
+  // The World-Eater wakes when you reach the summit
+  if (session.role !== 'guest' && quests.stepText('worldEater') === 'Defeat the World-Eater' && worldEater.state === 'inactive'
+    && player.level === summit && player.alive) {
+    if ((weTimer += dt) > WE.arriveDelay) {
+      worldEater.activate(player, { name: WE.name, maxHp: Math.round(WE.maxHealth * ngHp()), dmgMul: WE.dmgMul * ngDmg(),
+        boss: { phase2At: WE.phase2At, enrageGap: WE.enrageGap } });
+    }
+  }
+  // Post-game: dragons attack the valley now and then
+  if (flags.victory && session.role !== 'guest' && player.level === valley && !huntDragon.active && !dragon.alive) {
+    if ((attackTimer -= dt) <= 0) {
+      attackTimer = PG.dragonEvery[0] + Math.random() * (PG.dragonEvery[1] - PG.dragonEvery[0]);
+      startHunt(true);
+    }
+  }
   quests.update();
 
   if ((saveTimer += dt) >= CONFIG.save.autosaveInterval) { saveTimer = 0; save(); }
+}
+
+// ---- Per-frame sound: footsteps, enemy tells, dragon fire, music mood ----
+let lastStep = 0, fireTimer = 0;
+const tellState = new Map();
+function updateSound(dt) {
+  audio.setListener(player.pos);
+  const step = Math.floor(player.walkPhase / Math.PI);
+  if (step !== lastStep) { lastStep = step; if (player.grounded && player.speed > 0.8 && player.alive) audio.play('step'); }
+  for (const c of creatures) {        // growl / groan as they wind up an attack (their tell)
+    const was = tellState.get(c);
+    if (c.state === 'windup' && was !== 'windup' && c.alive && c.level === player.level) audio.play(c.kind === 'draugr' ? 'groan' : 'growl', c.pos);
+    tellState.set(c, c.state);
+  }
+  fireTimer -= dt;
+  for (const d of [dragon, huntDragon, worldEater]) {
+    if (d.breathing > 0 && d.alive && fireTimer <= 0 && player.level === d.level) { audio.play('fire', d.pos); fireTimer = 0.28; }
+  }
+  const boss = (player.level === valley && (dragon.alive || huntDragon.alive)) || (player.level === summit && worldEater.alive);
+  audio.setMood(boss ? 'boss' : 'explore');
 }
 
 // ---- Loop ----
@@ -556,6 +726,7 @@ function frame(now) {
   for (const c of creatures) c.render(alpha);
   dragon.render(alpha);
   huntDragon.render(alpha);
+  worldEater.render(alpha);
   for (const c of chests) c.update(dt);
   for (const n of npcs) n.update(dt, player, dialog.npc === n);
   for (const d of Object.values(dungeons)) d.update(dt);
@@ -571,7 +742,7 @@ function frame(now) {
   let obj = started ? quests.active() : null;
   let mark = null;
   const inDungeon = player.level !== valley;
-  if (huntDragon.alive) obj = { name: 'Dragon hunt', text: `Slay the ${huntDragon.name}`, target: { level: valley, pos: huntDragon.pos } };
+  if (huntDragon.alive && player.level === valley) obj = { name: 'Dragon hunt', text: `Slay the ${huntDragon.name}`, target: { level: valley, pos: huntDragon.pos } };
   if (obj?.target) {
     if (obj.target.level === player.level) mark = obj.target.pos;
     else mark = inDungeon ? player.level.exit : entrances[obj.target.level.key].front;
@@ -586,10 +757,12 @@ function frame(now) {
   hud.setBow(player);
   hud.setSlow(shouts.slowLeft > 0 || (session.role === 'guest' && session.mirror.slow));
   if (session.role === 'guest') {
-    for (const d of [dragon, huntDragon]) if (d.state === 'soul' && Math.random() < 0.5) fx.soul({ x: d.pos.x, y: d.pos.y + 2, z: d.pos.z }, player.pos, 2);
+    for (const d of [dragon, huntDragon, worldEater]) if (d.state === 'soul' && Math.random() < 0.5) fx.soul({ x: d.pos.x, y: d.pos.y + 2, z: d.pos.z }, player.pos, 2);
   }
-  hud.setBoss(player.level !== valley ? null : dragon.alive ? dragon : huntDragon.alive ? huntDragon : null);
+  hud.setBoss(player.level === summit ? (worldEater.alive ? worldEater : null)
+    : player.level !== valley ? null : dragon.alive ? dragon : huntDragon.alive ? huntDragon : null);
 
+  updateSound(dt);
   hud.frame(dt, player);
   renderer.render(scene, camera);
 }
@@ -603,8 +776,9 @@ addEventListener('resize', () => {
 
 // Debug handle for testing in the console
 window.frostbound = {
-  player, creatures, dragon, huntDragon, entities, npcs, dialog, flags, village, events, inventory, skills, shouts, quests, chests, dungeons, den, barrow,
+  player, creatures, dragon, huntDragon, worldEater, summit, entities, npcs, dialog, flags, village, audio, events, inventory, skills, shouts, quests, chests, dungeons, den, barrow,
   valley, entrances, interactables, projectiles, fx, save, menu, session, coopPanel,
   tpCam,
   go: (level, at, facing = 0) => { player.moveTo(level, at, facing); enterLevel(level, facing); },
+  dragonAttack: () => startHunt(true), get ng() { return ng; }, tiers, refills,
 };

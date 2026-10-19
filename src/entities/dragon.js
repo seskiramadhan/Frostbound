@@ -14,11 +14,13 @@ const ease = t => t * t * (3 - 2 * t);
 
 function lambert(color) { return new THREE.MeshLambertMaterial({ color, flatShading: true }); }
 
-function buildModel() {
-  const scale = 0x5a2e24, belly = 0x9a7a52, wingC = 0x7a3a2c, horn = 0xd8cdb0;
+function buildModel(look = {}) {
+  const c = look.colors ?? {};
+  const scale = c.scale ?? 0x5a2e24, belly = c.belly ?? 0x9a7a52, wingC = c.wing ?? 0x7a3a2c, horn = c.horn ?? 0xd8cdb0;
   const root = new THREE.Group();
   const body = new THREE.Group();   // pitch/bank for flight
   body.position.y = 2.4;
+  root.scale.setScalar(look.scale ?? 1);
   root.add(body);
 
   body.add(box(2.0, 1.7, 4.4, scale, 0, 0, 0));                 // torso
@@ -110,7 +112,8 @@ function buildModel() {
 }
 
 export class Dragon {
-  constructor(scene, level, events, fx, entities = null) {
+  // look (optional): { scale, colors: { scale, belly, wing, horn } } for special dragons.
+  constructor(scene, level, events, fx, entities = null, look = {}) {
     this.level = level;      // always the valley
     this.events = events;
     this.fx = fx;
@@ -120,8 +123,6 @@ export class Dragon {
     this.name = DR.name;
     this.maxHp = DR.maxHealth;
     this.hp = this.maxHp;
-    this.airRadius = DR.airRadius;
-    this.aimHeight = 2.4;
     this.alive = false;      // not in the world until activated
     this.state = 'inactive';
     this.stateTime = 0;
@@ -138,7 +139,10 @@ export class Dragon {
     this.angle = 0;          // position on the circling orbit
     this.target = null;
 
-    this.model = buildModel();
+    this.model = buildModel(look);
+    this.size = look.scale ?? 1;
+    this.aimHeight = 2.4 * this.size;
+    this.airRadius = DR.airRadius * this.size;
     this.flash = new Flash(this.model.root);
     this.dmgMul = 1;
     this.baseColors = [];                // to undo char() when a hunt dragon is reused
@@ -148,15 +152,18 @@ export class Dragon {
   }
 
   get flying() { return ['arrive', 'circle', 'strafe', 'land', 'takeoff', 'falling'].includes(this.state); }
-  get radius() { return this.flying ? 0.1 : DR.radius; }   // tiny when flying so it never body-blocks
+  get radius() { return this.flying ? 0.1 : DR.radius * this.size; }   // tiny when flying so it never body-blocks
   get blocking() { return false; }
   get active() { return this.state !== 'inactive' && this.state !== 'dead'; }
 
   #set(s) { this.state = s; this.stateTime = 0; this.struck = false; this.tick2 = 0; }
 
   // Fly in from far away toward `target`.
-  // Fly in from far away toward `target`. opts (dragon hunts): { name, maxHp, dmgMul }.
+  // Fly in from far away toward `target`. opts: { name, maxHp, dmgMul } (hunts, NG+), and
+  // boss: { phase2At, enrageGap } for the World-Eater (lands for good below phase2At health).
   activate(target, opts = {}) {
+    this.boss = opts.boss ?? null;
+    this.phase2 = false;
     this.name = opts.name ?? DR.name;
     this.maxHp = opts.maxHp ?? DR.maxHealth;
     this.dmgMul = opts.dmgMul ?? 1;
@@ -250,9 +257,10 @@ export class Dragon {
         this.angle += DR.flySpeed / DR.circleRadius * dt;
         const cx = c.x + Math.cos(this.angle) * DR.circleRadius, cz = c.z + Math.sin(this.angle) * DR.circleRadius;
         this.#flyToward(cx, this.#groundAt(c) + DR.altitude, cz, DR.flySpeed, dt, 2);
+        if (this.boss && !this.phase2 && this.hp <= this.boss.phase2At * this.maxHp && here) { this.#enterPhase2(tp); break; }
         if (here && this.stateTime > this.circleFor) {
-          if (this.passes >= DR.passesBeforeLanding) this.#startLanding(tp);
-          else { this.#set('strafe'); this.passed = false; }
+          if (this.passes >= DR.passesBeforeLanding && !this.boss) this.#startLanding(tp);
+          else { this.#set('strafe'); this.passed = false; if (this.boss) this.passes = 0; }
         }
         break;
       }
@@ -298,7 +306,14 @@ export class Dragon {
       }
       case 'stunned':
         this.pos.y = this.#groundAt(this.pos);
-        if (this.stateTime > DR.crashStagger) { this.#set('ground'); this.groundFor = range(DR.groundTime); this.groundDamage = 0; this.attackIn = 0.8; }
+        if (this.boss && !this.phase2 && this.hp <= this.boss.phase2At * this.maxHp) { this.phase2 = true; this.events.emit('bossPhase2', { dragon: this }); }
+        if (this.stateTime > (this.stunFor ?? DR.crashStagger)) {
+          this.stunFor = null;
+          this.#set('ground');
+          this.groundFor = range(DR.groundTime);
+          this.groundDamage = 0;
+          this.attackIn = 0.8;
+        }
         break;
       case 'ground':
         this.#groundTick(dt, here);
@@ -340,6 +355,21 @@ export class Dragon {
     return this.facing + Math.max(-k, Math.min(k, diff));
   }
 
+  // World-Eater: forced down for good, enraged.
+  #enterPhase2(tp) {
+    this.phase2 = true;
+    this.events.emit('bossPhase2', { dragon: this });
+    this.#startLanding(tp);
+  }
+
+  // Ice Form: a flying dragon falls; on the ground it is frozen for `time`.
+  freeze(time) {
+    if (this.flying) { this.forceDown(); return; }
+    this.#set('stunned');
+    this.stunFor = time;
+    this.flash.trigger(0x3070ff);
+  }
+
   #startLanding(tp) {
     // Land ~11 m from the player on this side
     const dx = this.pos.x - tp.x, dz = this.pos.z - tp.z, d = Math.hypot(dx, dz) || 1;
@@ -358,7 +388,8 @@ export class Dragon {
     const want = Math.atan2(dx, dz);
     const off = Math.abs(Math.atan2(Math.sin(want - this.facing), Math.cos(want - this.facing)));
     this.groundFor -= dt;
-    if (this.groundFor <= 0 || this.groundDamage > DR.takeoffAfterDamage * this.maxHp) { this.#takeoff(); return; }
+    const grounded = this.boss && this.phase2;   // the World-Eater stays down in phase 2
+    if (!grounded && (this.groundFor <= 0 || this.groundDamage > DR.takeoffAfterDamage * this.maxHp)) { this.#takeoff(); return; }
 
     if ((this.attackIn -= dt) <= 0) {
       if (off > 2.2 && d < DR.tail.reach) { this.#set('tail'); return; }
@@ -395,7 +426,7 @@ export class Dragon {
         this.events.emit('areaAttack', { attacker: this, x: bx, y: this.pos.y, z: bz, radius: T.reach - 2, damage: T.damage * this.dmgMul });
       }
     }
-    if (this.stateTime >= tStrike + T.time) { this.#set('ground'); this.attackIn = range(DR.attackGap); }
+    if (this.stateTime >= tStrike + T.time) { this.#set('ground'); this.attackIn = range(DR.attackGap) * (this.phase2 ? this.boss.enrageGap : 1); }
   }
 
   #takeoff() {

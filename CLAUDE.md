@@ -109,7 +109,7 @@ competitive PvP, matchmaking, accounts/servers that cost money.
 3. ✅ **First quest:** one dungeon, loot + inventory, skill leveling, save/load
 4. ✅ **Dragons:** dragon AI + fight, word walls, the 3 shouts (+ bow, Archery)
 5. ⬜ **Full game:** village + NPCs, main + side quests, final boss, post-game, audio, polish
-   (✅ 5a village + 5b quests; ⬜ 5c boss/ending/post-game; ⬜ 5d audio/polish; see NEXT.md)
+   (✅ 5a village + 5b quests; ✅ 5c boss/ending/post-game; ✅ 5d audio; see NEXT.md)
 
 Co-op phases slot in between:
 - ✅ **N1:** transport + lobby (room code / `?join=`), see each other move
@@ -129,7 +129,8 @@ src/
   input.js             # keyboard/mouse + touch -> one command object per tick
   camera.js            # third-person orbit camera (pulls in at walls, shake)
   world/               # terrain, props, environment (fog/light/snow), dungeon (ASCII maps,
-                       # entrances, word walls), village (Frosthollow), chest, fx (particles)
+                       # entrances, word walls), village (Frosthollow), summit (boss arena),
+                       # chest, fx (particles)
   entities/            # player, creature (wolf/draugr AI) + wolfModel/draugrModel,
                        # dragon, npc (villagers), remotePlayer (co-op), model (helpers)
   systems/             # events, entities (id registry), physics, combat, inventory,
@@ -137,7 +138,7 @@ src/
   ui/                  # hud, menu (Bag: Items/Shouts/Skills/Quests/Co-op), dialog, coop panel
   net/                 # transport (interface) + peerTransport, protocol, session,
                        # remoteBody (host side), mirror (guest side)
-  audio.js             # (Phase 5d) Web Audio procedural sounds
+  audio.js             # Web Audio: procedural SFX + music (audio/music/, local/ override)
 ```
 
 ## Architecture notes
@@ -147,6 +148,13 @@ src/
 - **Dungeons** are ASCII maps in `world/dungeon.js` (`#` rock, `.` floor, `S` start,
   `X` exit, `t` brazier, `W` word wall, letters for creatures/chests via `spawns`/`chests`).
   Lighting is baked into vertex colours; no real lights except the player's torch.
+  A dungeon can have a hidden `secretWall` (`V` in the map) that wakes after victory.
+- **Summit** (`world/summit.js`) is an outdoor level (`outdoor: true`, snow, open sky) reached
+  from the `summit` path entrance. The World-Eater is a second `Dragon` with a `look` (colour,
+  scale) and `boss` options: phase 1 airborne, phase 2 (below `phase2At` health) grounded for good.
+- **Post-game** (after `flags.victory`): random dragon attacks, dungeons refill with a higher
+  `tier` (tougher enemies, better chests), Ice Form secret wall, New Game+ (`ng` in the save;
+  keeps skills, scales enemies via `CONFIG.postGame`).
 - **Creatures** share one AI (`entities/creature.js`); a config section picks the body
   (`body: 'wolf' | 'draugr'`). Bosses have `boss: true` + `saveKey`.
 - **Hits/deaths go through the event bus** (`attack`, `areaAttack`, `damage`, `blocked`,
