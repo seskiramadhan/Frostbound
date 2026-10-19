@@ -5,16 +5,20 @@ import { Input } from './input.js';
 import { Terrain } from './world/terrain.js';
 import { buildProps } from './world/props.js';
 import { setupEnvironment, applyAmbience, Snow } from './world/environment.js';
-import { Dungeon, FROSTFANG_DEN, buildCaveEntrance } from './world/dungeon.js';
+import { Dungeon, FROSTFANG_DEN, BLEAKROCK_BARROW, buildEntrance } from './world/dungeon.js';
 import { Chest } from './world/chest.js';
+import { Fx } from './world/fx.js';
 import { Player } from './entities/player.js';
-import { spawnWolfPack, spawnDungeonWolves } from './entities/wolf.js';
+import { spawnWolfPack, spawnDungeonCreatures } from './entities/creature.js';
+import { Dragon } from './entities/dragon.js';
 import { EventBus } from './systems/events.js';
 import { EntityRegistry } from './systems/entities.js';
 import { Combat } from './systems/combat.js';
 import { separateBodies } from './systems/physics.js';
 import { Inventory, ITEMS } from './systems/inventory.js';
 import { Skills, applyStats } from './systems/skills.js';
+import { Shouts } from './systems/shouts.js';
+import { Projectiles } from './systems/projectiles.js';
 import { Quests } from './systems/quests.js';
 import { loadSave, writeSave, clearSave } from './systems/save.js';
 import { ThirdPersonCamera } from './camera.js';
@@ -33,44 +37,60 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(R.fov, innerWidth / innerHeight, R.near, R.far);
 const env = setupEnvironment(scene);
 
-// Levels: the valley and Frostfang Den (built far away; fog hides one from the other)
+// Levels: the valley plus dungeons (each built far away; fog hides one from another)
 const valley = new Terrain();
 scene.add(valley.mesh);
 const props = buildProps(valley);
 scene.add(props.group);
 valley.colliders = props.colliders;
-const entrance = buildCaveEntrance(valley);
-scene.add(entrance.group);
-valley.colliders.push(...entrance.colliders);
-const den = new Dungeon(FROSTFANG_DEN);
-scene.add(den.group);
-const levels = { valley, den };
+const dungeons = {}, entrances = {};
+for (const def of [FROSTFANG_DEN, BLEAKROCK_BARROW]) {
+  const d = new Dungeon(def);
+  scene.add(d.group);
+  dungeons[def.key] = d;
+  const e = buildEntrance(valley, CONFIG.dungeon.entrances[def.key]);
+  scene.add(e.group);
+  valley.colliders.push(...e.colliders);
+  entrances[def.key] = e;
+}
+const { den, barrow } = dungeons;
+const levels = { valley, ...dungeons };
 const snow = new Snow(scene);
+const fx = new Fx(scene);
 
 const events = new EventBus();
 const entities = new EntityRegistry();
-new Combat(events, entities);
+const combat = new Combat(events, entities);
 
 const player = entities.add(new Player(scene, valley, events, entities));
-const denWolves = spawnDungeonWolves(scene, den, events, entities);
-const wolves = [...spawnWolfPack(scene, valley, events, entities), ...denWolves.wolves];
-const chests = den.chests.map(c => new Chest(scene, den, c.pos, c.lootKey, Math.PI));
+const creatures = spawnWolfPack(scene, valley, events, entities);
+const bosses = {};
+for (const d of Object.values(dungeons)) {
+  const r = spawnDungeonCreatures(scene, d, events, entities);
+  creatures.push(...r.creatures);
+  bosses[d.key] = r.boss;
+}
+const dragon = entities.add(new Dragon(scene, valley, events, fx));
+const chests = Object.values(dungeons).flatMap(d => d.chests.map(c => new Chest(scene, d, c.pos, c.lootKey, Math.PI)));
+const projectiles = new Projectiles(scene, entities, combat);
 const tpCam = new ThirdPersonCamera(camera, valley);
 tpCam.yaw = player.facing + Math.PI; // start behind the player
 
 const inventory = new Inventory(events);
 const skills = new Skills(events, player);
+const shouts = new Shouts(events, entities, combat, fx);
 const visited = {};
 const world = {
-  valley, den, entrance, inventory, visited, alpha: denWolves.alpha,
+  valley, den, barrow, entrances, inventory, visited, shouts, dragon, alpha: bosses.den,
   chest: key => chests.find(c => c.key === key),
 };
 const quests = new Quests(events, world);
 
 const hud = new Hud();
-const menu = new Menu(inventory, skills, player);
-const input = new Input(renderer.domElement, $('joy'), $('joy-knob'),
-  { jump: $('btn-jump'), interact: $('btn-interact'), menu: $('btn-bag') });
+const menu = new Menu(inventory, skills, player, shouts);
+const input = new Input(renderer.domElement, $('joy'), $('joy-knob'), {
+  jump: $('btn-jump'), interact: $('btn-interact'), menu: $('btn-bag'), shout: $('btn-shout'), bow: $('btn-bow'),
+});
 
 // ---- Travel between levels ----
 let busy = false;   // fading between levels
@@ -101,11 +121,32 @@ function openChest(chest) {
   save();
 }
 
+function learnWord(d) {
+  const w = d.wordWall;
+  fx.soul({ x: w.pos.x, y: 1, z: w.pos.z }, player.pos, 30);
+  shouts.learn(w.shout);
+  d.setWordLearned(true);
+  const other = Object.values(dungeons).find(o => o.wordWall && !shouts.known.has(o.wordWall.shout));
+  if (other) setTimeout(() => hud.toast(`Legends tell of another word wall in ${other.name}`), 3500);
+  save();
+}
+
 // Things you can walk up to and press E / Use on
 const interactables = [
-  { level: valley, pos: entrance.front, label: `Enter ${den.name}`, use: () => travel(den, den.start, 0) },
-  { level: den, pos: den.exit, label: `Leave ${den.name}`, use: () => travel(valley, entrance.outside, entrance.facing) },
-  ...chests.map(c => ({ level: den, pos: c.pos, label: 'Open chest', enabled: () => !c.opened, use: () => openChest(c) })),
+  ...Object.values(dungeons).flatMap(d => {
+    const e = entrances[d.key];
+    const list = [
+      { level: valley, pos: e.front, label: `Enter ${d.name}`, use: () => travel(d, d.start, 0) },
+      { level: d, pos: d.exit, label: `Leave ${d.name}`, use: () => travel(valley, e.outside, e.facing) },
+    ];
+    if (d.wordWall) {
+      const def = CONFIG.shouts[d.wordWall.shout];
+      list.push({ level: d, pos: d.wordWall.pos, label: `Learn the word: ${def.word}`,
+        enabled: () => !shouts.known.has(d.wordWall.shout), use: () => learnWord(d) });
+    }
+    return list;
+  }),
+  ...chests.map(c => ({ level: c.level, pos: c.pos, label: 'Open chest', enabled: () => !c.opened, use: () => openChest(c) })),
 ];
 
 function nearestInteractable() {
@@ -118,11 +159,40 @@ function nearestInteractable() {
   return best;
 }
 
+// ---- Bow aiming: auto-aim at the best enemy near the camera direction (with lead on fast flyers) ----
+const BW = CONFIG.bow;
+const aimFrom = new THREE.Vector3(), aimAt = new THREE.Vector3(), camDir = new THREE.Vector3();
+events.on('shootArrow', ({ shooter, power, damage }) => {
+  const f = shooter.facing;
+  aimFrom.set(shooter.pos.x + Math.sin(f) * 0.5, shooter.pos.y + 1.45, shooter.pos.z + Math.cos(f) * 0.5);
+  camera.getWorldDirection(camDir);
+  const yawF = Math.atan2(camDir.x, camDir.z);
+  let best = null, bestScore = Infinity;
+  for (const e of entities) {
+    if (!e.alive || e.team === shooter.team || e.level !== shooter.level) continue;
+    const dx = e.pos.x - shooter.pos.x, dz = e.pos.z - shooter.pos.z, d = Math.hypot(dx, dz);
+    if (d > BW.aimRange) continue;
+    const off = Math.abs(Math.atan2(Math.sin(Math.atan2(dx, dz) - yawF), Math.cos(Math.atan2(dx, dz) - yawF)));
+    if (off > BW.aimArc) continue;
+    if (!shooter.level.lineOfSight(shooter.pos, e.pos)) continue;
+    const score = off * 30 + d;
+    if (score < bestScore) { bestScore = score; best = e; }
+  }
+  if (best) {
+    aimAt.set(best.pos.x, best.pos.y + (best.aimHeight ?? 0.8), best.pos.z);
+    const t = aimFrom.distanceTo(aimAt) / (BW.speed * (0.55 + 0.45 * power));
+    aimAt.addScaledVector(best.vel, t * (best.flying ? 1 : 0.5));   // lead moving targets
+  } else {
+    aimAt.copy(camera.position).addScaledVector(camDir, 60);
+  }
+  projectiles.fire(shooter, aimFrom, aimAt, power, damage);
+});
+
 // ---- Feedback ----
 const SHAKE = CONFIG.combat.shake;
 events.on('damage', ({ target }) => {
   if (target === player) { hud.hurt(); tpCam.shake(SHAKE.hit); }
-  else hud.showTarget(target);
+  else if (target !== dragon) hud.showTarget(target);
 });
 events.on('blocked', ({ target }) => { if (target === player) tpCam.shake(SHAKE.block); });
 events.on('death', ({ target, killer }) => {
@@ -143,19 +213,33 @@ events.on('perk', ({ id, perk }) => hud.announce(`${CONFIG.skills[id].name} mast
 events.on('questStarted', ({ name, text }) => { hud.announce(`Quest started: ${name}`, text); save(); });
 events.on('questStep', ({ text }) => { hud.toast(`New objective: ${text}`); save(); });
 events.on('questDone', ({ name }) => { hud.announce(`Quest completed: ${name}`); save(); });
+events.on('shoutLearned', ({ def }) => hud.announce(`Word of Power: ${def.word}`, `${def.name}. ${IS_TOUCH ? 'Tap the shout button' : 'Press Q'} to use it.`));
+events.on('shout', ({ id }) => tpCam.shake(id === 'slowTime' ? 0.15 : 0.35));
+events.on('bowToggled', ({ bowMode }) => hud.toast(bowMode ? 'Bow drawn: hold to aim, release to shoot' : 'Sword drawn'));
+events.on('dragonRoar', () => { hud.announce('A dragon approaches!'); tpCam.shake(0.45); });
+events.on('dragonDowned', () => hud.toast('The dragon crashes to the ground!'));
+events.on('dragonDead', () => {
+  dragon.char();
+  shouts.learn('fireBreath', true);
+  shouts.select('fireBreath');
+  hud.announce('Dragon soul absorbed', `Word of Power: ${CONFIG.shouts.fireBreath.word}. ${CONFIG.shouts.fireBreath.name}`);
+  save();
+});
 
 // ---- Save / load ----
 let resetting = false;
 function save() {
   if (resetting || !started || !player.alive) return;
   writeSave({
-    player: { level: player.level === den ? 'den' : 'valley', pos: player.pos.toArray(), facing: player.facing, hp: player.hp },
+    player: { level: player.level.key ?? 'valley', pos: player.pos.toArray(), facing: player.facing, hp: player.hp, bowMode: player.bowMode },
     inventory: inventory.toJSON(),
     skills: skills.toJSON(),
+    shouts: shouts.toJSON(),
     quests: quests.toJSON(),
     world: {
       chests: chests.filter(c => c.opened).map(c => c.key),
-      dead: wolves.filter(w => w.key && !w.alive).map(w => w.key),
+      dead: creatures.filter(w => w.key && !w.alive).map(w => w.key),
+      dragonDead: dragon.state === 'dead',
       visited,
     },
   });
@@ -164,19 +248,23 @@ function save() {
 function applySave(s) {
   inventory.load(s.inventory);
   skills.load(s.skills);
+  shouts.load(s.shouts);
   quests.load(s.quests);
   Object.assign(visited, s.world?.visited);
   for (const key of s.world?.chests ?? []) world.chest(key)?.open(true);
-  for (const key of s.world?.dead ?? []) wolves.find(w => w.key === key)?.removeForGood();
+  for (const key of s.world?.dead ?? []) creatures.find(w => w.key === key)?.removeForGood();
+  if (s.world?.dragonDead) dragon.setDead();
   const level = levels[s.player?.level] ?? valley;
   const [x, , z] = s.player?.pos ?? [0, 0, 0];
   player.moveTo(level, new THREE.Vector3(x, 0, z), s.player?.facing ?? Math.PI);
   player.hp = Math.max(1, Math.min(player.maxHp, s.player?.hp ?? player.maxHp));
+  player.bowMode = !!s.player?.bowMode;
   enterLevel(level, player.facing);
 }
 
 const saved = loadSave();
 if (saved) applySave(saved);
+for (const d of Object.values(dungeons)) if (d.wordWall) d.setWordLearned(shouts.known.has(d.wordWall.shout));
 applyStats(player, inventory, skills);
 hud.setStartText(!!saved);
 
@@ -221,13 +309,13 @@ addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 addEventListener('pagehide', save);
 
 // ---- Fixed-step logic ----
-let saveTimer = 0;
+let saveTimer = 0, dragonTimer = 0;
 const SPAWN = new THREE.Vector3(CONFIG.player.spawn[0], 0, CONFIG.player.spawn[1]);
 function tick(dt) {
   const cmd = input.update();
   if (player.canRespawn && cmd.attack) {
-    const inDen = player.level === den;
-    player.respawn(player.level, inDen ? den.start : SPAWN, inDen ? 0 : Math.PI);
+    const inDungeon = player.level !== valley;
+    player.respawn(player.level, inDungeon ? player.level.start : SPAWN, inDungeon ? 0 : Math.PI);
     enterLevel(player.level, player.facing);
     hud.showDeath(false);
     cmd.attack = false;
@@ -237,9 +325,26 @@ function tick(dt) {
   hud.setPrompt(near?.label ?? null);
   if (near && cmd.interact) near.use();
 
+  if (cmd.shout && player.canShout && shouts.ready) {
+    player.startShout(tpCam.yaw + Math.PI);
+    shouts.use(player);
+  }
+
+  // Enemies run on slowed time while Slow Time is active; players never do
+  const edt = dt * shouts.timeScale;
   player.tick(dt, cmd, tpCam.yaw);
-  for (const w of wolves) w.tick(dt);
+  for (const c of creatures) c.tick(edt);
+  dragon.tick(edt);
+  projectiles.update(dt);
+  shouts.update(dt);
   separateBodies(entities);
+
+  // Quest flow: Dragon Rising follows The Howling Den; the dragon comes when you're back outside
+  if (quests.isDone('howlingDen')) quests.start('dragonRising');
+  if (quests.stepText('dragonRising') === 'Slay the dragon' && dragon.state === 'inactive'
+    && player.level === valley && player.alive) {
+    if ((dragonTimer += dt) > CONFIG.dragon.arriveDelay) dragon.activate(player);
+  }
   quests.update();
 
   if ((saveTimer += dt) >= CONFIG.save.autosaveInterval) { saveTimer = 0; save(); }
@@ -272,27 +377,34 @@ function frame(now) {
 
   const alpha = playing ? acc / STEP : 1;
   player.render(alpha, renderPos);
-  for (const w of wolves) w.render(alpha);
+  for (const c of creatures) c.render(alpha);
+  dragon.render(alpha);
   for (const c of chests) c.update(dt);
-  den.update(dt);
+  for (const d of Object.values(dungeons)) d.update(dt);
+  if (playing) fx.update(dt * (shouts.timeScale < 1 ? 0.6 : 1));
   tpCam.update(dt, renderPos);
   // Carried light sits between player and camera so the side you see is lit
   env.torch.position.set(renderPos.x, renderPos.y + TORCH.height, renderPos.z).lerp(camera.position, 0.45);
   if (snow.points.visible) snow.update(dt, renderPos);
 
-  // Objective + marker (points at the door when the target is on another level)
+  // Objective + marker (points at a door when the target is on another level)
   let obj = started ? quests.active() : null;
   let mark = null;
+  const inDungeon = player.level !== valley;
   if (obj?.target) {
     if (obj.target.level === player.level) mark = obj.target.pos;
-    else mark = player.level === den ? den.exit : entrance.front;
-  } else if (started && player.level === den) {
-    // Nothing left to do down here: show the way out
-    obj = { name: den.name, text: `Leave ${den.name}` };
-    mark = den.exit;
+    else mark = inDungeon ? player.level.exit : entrances[obj.target.level.key].front;
+  } else if (started && inDungeon) {
+    // Nothing (more) to do down here: show the way out
+    obj ??= { name: player.level.name, text: `Leave ${player.level.name}` };
+    mark = player.level.exit;
   }
   hud.setObjective(obj);
   hud.setMarker(mark, camera, player.pos);
+  hud.setShout(shouts);
+  hud.setBow(player);
+  hud.setSlow(shouts.slowLeft > 0);
+  hud.setBoss(dragon.alive && player.level === valley ? dragon : null);
 
   hud.frame(dt, player);
   renderer.render(scene, camera);
@@ -306,4 +418,9 @@ addEventListener('resize', () => {
 });
 
 // Debug handle for testing in the console
-window.frostbound = { player, wolves, entities, events, inventory, skills, quests, chests, den, valley, entrance, interactables, save, menu };
+window.frostbound = {
+  player, creatures, dragon, entities, events, inventory, skills, shouts, quests, chests, dungeons, den, barrow,
+  valley, entrances, interactables, projectiles, fx, save, menu,
+  tpCam,
+  go: (level, at, facing = 0) => { player.moveTo(level, at, facing); enterLevel(level, facing); },
+};

@@ -1,4 +1,4 @@
-// Inventory: item counts by id, gold, and what's equipped. Item stats live in CONFIG.items.
+// Inventory: item counts by id, gold, and what's equipped (weapon, armor, bow). Item stats live in CONFIG.items.
 // Emits 'inventory' (anything changed) and 'itemAdded' { id, count } / 'goldAdded' { amount }.
 import { CONFIG } from '../config.js';
 
@@ -14,7 +14,7 @@ export class Inventory {
     const S = CONFIG.startInventory;
     this.items = { ...S.items };
     this.gold = S.gold;
-    this.equipped = { weapon: S.weapon, armor: S.armor };
+    this.equipped = { weapon: S.weapon, armor: S.armor, bow: null };
   }
 
   count(id) { return this.items[id] ?? 0; }
@@ -22,6 +22,7 @@ export class Inventory {
   add(id, count = 1, quiet = false) {
     if (!ITEMS[id]) return;
     this.items[id] = this.count(id) + count;
+    if (ITEMS[id].type === 'bow' && !this.equipped.bow) this.equipped.bow = id;   // first bow: ready to use
     if (!quiet) this.events.emit('itemAdded', { id, count });
     this.events.emit('inventory');
   }
@@ -40,7 +41,7 @@ export class Inventory {
 
   equip(id) {
     const def = ITEMS[id];
-    if (!def || !this.count(id) || (def.type !== 'weapon' && def.type !== 'armor')) return;
+    if (!def || !this.count(id) || !['weapon', 'armor', 'bow'].includes(def.type)) return;
     this.equipped[def.type] = id;
     this.events.emit('inventory');
   }
@@ -56,13 +57,13 @@ export class Inventory {
       this.events.emit('potionUsed', { id });
       return true;
     }
-    if (def.type === 'weapon' || def.type === 'armor') { this.equip(id); return true; }
+    if (['weapon', 'armor', 'bow'].includes(def.type)) { this.equip(id); return true; }
     return false;
   }
 
   // Grouped list for the UI: [{ type, entries: [{ id, def, count, equipped }] }]
   grouped() {
-    const order = ['weapon', 'armor', 'potion', 'misc'];
+    const order = ['weapon', 'bow', 'armor', 'potion', 'misc'];
     return order.map(type => ({
       type,
       entries: Object.keys(this.items).filter(id => ITEMS[id]?.type === type).map(id => ({

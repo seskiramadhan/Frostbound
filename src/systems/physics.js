@@ -53,6 +53,7 @@ export function separateBodies(bodies) {
   for (let i = 0; i < list.length; i++) {
     for (let j = i + 1; j < list.length; j++) {
       const a = list[i].pos, b = list[j].pos, min = list[i].radius + list[j].radius;
+      if (Math.abs(a.y - b.y) > 2.5) continue;   // e.g. a dragon flying overhead
       const dx = b.x - a.x, dz = b.z - a.z;
       if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
       const d = Math.hypot(dx, dz);

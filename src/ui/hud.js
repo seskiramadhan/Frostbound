@@ -1,7 +1,7 @@
 // HUD: start overlay, health/stamina bars, enemy bar, hurt flash, death screen,
 // objective + quest marker, interact prompt, messages, fade, FPS counter.
 import * as THREE from 'three';
-import { IS_TOUCH } from '../config.js';
+import { CONFIG, IS_TOUCH } from '../config.js';
 
 const $ = id => document.getElementById(id);
 const v = new THREE.Vector3();
@@ -11,7 +11,8 @@ export class Hud {
     this.overlay = $('overlay');
     this.fpsEl = $('fps');
     $(IS_TOUCH ? 'help-desktop' : 'help-touch').remove();
-    if (!IS_TOUCH) for (const id of ['btn-jump', 'btn-interact', 'btn-bag']) $(id).remove();
+    if (!IS_TOUCH) for (const id of ['btn-jump', 'btn-interact', 'btn-bag', 'btn-shout', 'btn-bow']) $(id).remove();
+    if (IS_TOUCH) $('shout-ind').remove();
 
     this.hpBar = $('hp');
     this.stBar = $('st');
@@ -32,6 +33,13 @@ export class Hud {
     this.markerEl = $('marker');
     this.markerDist = $('marker-dist');
     this.fadeEl = $('fade');
+    this.shoutBtn = $('btn-shout') ?? $('shout-ind');
+    this.bowBtn = $('btn-bow');
+    this.slowEl = $('slowmo');
+    this.bossEl = $('boss');
+    this.bossName = $('boss-name');
+    this.bossBar = $('boss-hp');
+    this.shoutKey = '';
 
     this.target = null;
     this.targetTime = 0;
@@ -108,16 +116,45 @@ export class Hud {
     if (!pos) { this.markerEl.style.display = 'none'; return; }
     v.set(pos.x, pos.y + 2.2, pos.z).project(camera);
     let x = v.x, y = v.y;
-    if (v.z > 1) { x = -x; y = -y; }              // behind the camera: mirror
-    const edge = v.z > 1 || Math.abs(x) > 0.92 || Math.abs(y) > 0.88;
-    if (edge) {
-      const k = Math.max(Math.abs(x) / 0.92, Math.abs(y) / 0.88, 1e-6);
+    if (v.z > 1) {                                // behind the camera: pin to the left/right edge
+      x = v.x > 0 ? -0.92 : 0.92;
+      y = Math.max(-0.5, Math.min(0.5, -v.y));
+    } else if (Math.abs(x) > 0.92 || Math.abs(y) > 0.88) {
+      const k = Math.max(Math.abs(x) / 0.92, Math.abs(y) / 0.88);
       x /= k; y /= k;
-      if (v.z > 1) y = Math.min(y, -0.6);         // behind: hug the bottom half
     }
     this.markerEl.style.display = 'block';
     this.markerEl.style.transform = `translate(${(x * 0.5 + 0.5) * innerWidth}px, ${(-y * 0.5 + 0.5) * innerHeight}px)`;
     this.markerDist.textContent = `${Math.round(Math.hypot(pos.x - from.x, pos.z - from.z))}m`;
+  }
+
+  // Shout button / indicator: the word, with a ring that fills as the cooldown runs out.
+  setShout(shouts) {
+    const id = shouts.selected;
+    this.shoutBtn.style.display = id ? 'block' : 'none';
+    if (!id) return;
+    const def = CONFIG.shouts[id];
+    const label = IS_TOUCH ? def.word : `Q  ${def.word} · ${def.name}`;
+    if (label !== this.shoutKey) { this.shoutBtn.textContent = label; this.shoutKey = label; }
+    const k = shouts.cooldown > 0 ? 1 - shouts.cooldown / shouts.cooldownMax : 1;
+    this.shoutBtn.style.setProperty('--cd', `${Math.round(k * 100)}%`);
+    this.shoutBtn.classList.toggle('ready', k >= 1);
+  }
+
+  setBow(player) {
+    if (!this.bowBtn) return;
+    this.bowBtn.style.display = player.hasBow ? 'block' : 'none';
+    const label = player.bowMode ? 'Sword' : 'Bow';
+    if (this.bowBtn.textContent !== label) this.bowBtn.textContent = label;
+  }
+
+  setSlow(on) { this.slowEl.classList.toggle('on', on); }
+
+  setBoss(entity) {
+    this.bossEl.style.display = entity ? 'block' : 'none';
+    if (!entity) return;
+    if (this.bossName.textContent !== entity.name) this.bossName.textContent = entity.name;
+    this.bossBar.style.transform = `scaleX(${Math.max(0, entity.hp) / entity.maxHp})`;
   }
 
   // Fade to black, run fn, fade back in.
@@ -139,7 +176,7 @@ export class Hud {
       if (!t.alive) this.targetTime = Math.min(this.targetTime, 1.5);
       if (this.targetTime <= 0) this.target = null;
     }
-    this.targetWrap.style.opacity = this.target ? 1 : 0;
+    this.targetWrap.style.opacity = this.target && this.bossEl.style.display === 'none' ? 1 : 0;
 
     if (this.noticeTime > 0 && (this.noticeTime -= dt) <= 0) this.notice.classList.remove('on');
 

@@ -9,13 +9,25 @@ export const QUESTS = {
     name: 'The Howling Den',
     steps: [
       { text: 'Find Frostfang Den', done: w => w.visited.den,
-        target: w => ({ level: w.valley, pos: w.entrance.front }) },
+        target: w => ({ level: w.valley, pos: w.entrances.den.front }) },
       { text: 'Slay the Alpha Wolf', done: w => !w.alpha.alive,
         target: w => ({ level: w.den, pos: w.alpha.pos }) },
       { text: 'Claim the den\'s treasure', done: w => w.chest('den.denTreasure').opened,
         target: w => ({ level: w.den, pos: w.chest('den.denTreasure').pos }) },
     ],
     reward: w => w.inventory.addGold(CONFIG.loot.questReward),
+  },
+  dragonRising: {
+    name: 'Dragon Rising',
+    steps: [
+      { text: 'Explore Bleakrock Barrow', done: w => w.visited.barrow,
+        target: w => ({ level: w.valley, pos: w.entrances.barrow.front }) },
+      { text: 'Learn the Word of Power', done: w => w.shouts.known.has('push'),
+        target: w => ({ level: w.barrow, pos: w.barrow.wordWall.pos }) },
+      { text: 'Slay the dragon', done: w => w.dragon.state === 'dead',
+        target: w => (w.dragon.active ? { level: w.valley, pos: w.dragon.pos } : null) },
+    ],
+    reward: w => w.inventory.addGold(CONFIG.loot.dragonReward),
   },
 };
 
@@ -46,6 +58,14 @@ export class Quests {
         }
       }
     }
+  }
+
+  isDone(id) { return !!this.state[id]?.done; }
+
+  // Text of the current step of an active quest, or null.
+  stepText(id) {
+    const st = this.state[id];
+    return st && !st.done ? QUESTS[id].steps[st.step].text : null;
   }
 
   // The first unfinished quest's current objective: { name, text, target } or null.

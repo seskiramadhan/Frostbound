@@ -158,11 +158,14 @@ export const CONFIG = {
     respawnTime: 30,
     scale: 1,
     fur: 0x8c9096,
+    body: 'wolf',          // model module: wolf | draugr
   },
 
   // Overrides on top of `wolf` for the den's pack leader
   alphaWolf: {
     name: 'Alpha Wolf',
+    boss: true,
+    saveKey: 'alpha',
     maxHealth: 110,
     radius: 0.7,
     scale: 1.35,
@@ -175,13 +178,69 @@ export const CONFIG = {
     detectRadius: 14,
   },
 
+  // Overrides on top of `wolf` (same AI, different body)
+  draugr: {
+    name: 'Draugr',
+    body: 'draugr',
+    fur: 0x7d8783,         // skin
+    maxHealth: 55,
+    radius: 0.45,
+    walkSpeed: 1.3,
+    runSpeed: 4.2,
+    turnSpeed: 7,
+    detectRadius: 13,
+    loseRadius: 26,
+    attackRange: 2.2,
+    circleRange: 3.4,
+    attackersAtOnce: 2,
+    windup: [0.7, 1.0],
+    lungeSpeed: 3,
+    biteAt: 0.12,
+    biteTime: 0.4,
+    biteDamage: 12,
+    biteReach: 1.9,
+    biteArc: 0.9,
+    recover: [0.9, 1.5],
+    healRate: 0,
+    corpseTime: 12,
+  },
+  draugrWight: {
+    name: 'Draugr Wight',
+    boss: true,
+    saveKey: 'wight',
+    body: 'draugr',
+    fur: 0x5d6866,
+    scale: 1.18,
+    maxHealth: 130,
+    radius: 0.55,
+    walkSpeed: 1.3,
+    runSpeed: 4,
+    turnSpeed: 6,
+    detectRadius: 12,
+    attackRange: 2.4,
+    circleRange: 3.4,
+    windup: [0.8, 1.1],
+    lungeSpeed: 3,
+    biteAt: 0.12,
+    biteTime: 0.45,
+    biteDamage: 20,
+    biteReach: 2.2,
+    biteArc: 1.0,
+    recover: [1.0, 1.6],
+    healRate: 0,
+    corpseTime: 12,
+  },
+
   dungeon: {
-    origin: [1000, 0, 1000], // far outside the valley; fog hides everything else
     cell: 3,               // metres per map tile
     wallHeight: 5,
     roughness: 0.55,       // how far wall vertices are pushed around
     wallPad: 0.25,         // extra collision padding against rough walls
-    entranceDistance: 85,  // cave mouth distance from the player spawn
+    entrances: {           // where each dungeon's door sits in the valley (distance from spawn)
+      den: { distance: 85, angle0: 2.2, style: 'cave' },
+      barrow: { distance: 100, angle0: 4.7, style: 'ruin' },
+    },
+    inside: { wanderRadius: 2, leashRadius: 30 },  // creature overrides inside dungeons
     ambient: 0.32,         // baked light where no brazier reaches
     braziers: { range: 13, intensity: 1.1 },
     fog: { color: 0x0b0907, near: 5, far: 30 },
@@ -200,6 +259,7 @@ export const CONFIG = {
     steelSword:  { name: 'Steel Sword', type: 'weapon', damage: 21, value: 70, color: 0xeef4fa, length: 1.05 },
     clothes:     { name: 'Fur Clothes', type: 'armor', armor: 0, value: 5, color: 0x6b4c34 },
     hideArmor:   { name: 'Hide Armor', type: 'armor', armor: 20, value: 40, color: 0x8a6440 },  // armor = % damage taken off
+    huntingBow:  { name: 'Hunting Bow', type: 'bow', damage: 16, value: 50 },          // arrows are unlimited
     minorPotion: { name: 'Potion of Minor Healing', type: 'potion', heal: 35, value: 15 },
     wolfPelt:    { name: 'Wolf Pelt', type: 'misc', value: 8 },
     alphaPelt:   { name: 'Alpha Wolf Pelt', type: 'misc', value: 40 },
@@ -210,9 +270,11 @@ export const CONFIG = {
   loot: {
     denHall:     { items: { hideArmor: 1, minorPotion: 1 }, gold: 15 },
     denTreasure: { items: { steelSword: 1, minorPotion: 2 }, gold: 60 },
+    barrowHall:  { items: { huntingBow: 1, minorPotion: 2 }, gold: 30 },
     wolfDrop: 'wolfPelt',
     alphaDrop: 'alphaPelt',
     questReward: 50,       // gold for finishing the first quest
+    dragonReward: 200,
   },
 
   skills: {
@@ -223,6 +285,65 @@ export const CONFIG = {
       perk: { name: 'Armsman', desc: 'Sword damage +25%', damageMul: 1.25 } },
     block: { name: 'Block', xpPerBlock: 1.5, reductionPerLevel: 0.01,
       perk: { name: 'Shield Wall', desc: 'Blocking costs half stamina', staminaMul: 0.5 } },
+    archery: { name: 'Archery', xpPerHit: 1.2, damagePerLevel: 0.06,
+      perk: { name: 'Overdraw', desc: 'Bow damage +25%', damageMul: 1.25 } },
+  },
+
+  // Shouts: learned at word walls (and from dragon souls). Cooldowns in seconds.
+  shouts: {
+    push: { name: 'Unrelenting Force', word: 'FUS', desc: 'Throws enemies back. Knocks a flying dragon out of the sky.',
+      cooldown: 12, range: 10, arc: 0.7, damage: 6, force: 14, stagger: 1.4 },
+    slowTime: { name: 'Slow Time', word: 'TIID', desc: 'Enemies move at a crawl for a while.',
+      cooldown: 30, duration: 7, scale: 0.3 },
+    fireBreath: { name: 'Fire Breath', word: 'YOL', desc: 'A cone of fire in front of you.',
+      cooldown: 20, range: 9, arc: 0.55, damage: 35 },
+  },
+
+  bow: {
+    minDraw: 0.12,         // seconds; a tap still fires a weak arrow
+    fullDraw: 0.9,         // seconds to full power
+    minPower: 0.35,        // fraction of damage at minimum draw
+    speed: 60,             // m/s at full draw
+    gravity: 6,
+    life: 3,               // seconds before an arrow vanishes
+    aimRange: 70,          // auto-aim reach (also finds flying dragons)
+    aimArc: 0.45,          // half-angle around the camera direction
+    moveMul: 0.45,         // move speed while drawing
+    hitPad: 0.3,           // extra hit radius around targets
+  },
+
+  dragon: {
+    name: 'Dragon',
+    maxHealth: 650,
+    radius: 2.6,           // body hit radius on the ground
+    airRadius: 3.4,        // hit radius in the air (arrows)
+    spawnDistance: 130,
+    arriveDelay: 5,        // seconds after the quest step starts (in the valley)
+    flySpeed: 17,
+    circleRadius: 30,
+    altitude: 20,
+    circleTime: [5, 8],    // seconds circling before a fire pass
+    passesBeforeLanding: 2,
+    strafeAltitude: 8,
+    strafeSpeed: 22,
+    airFire: { damage: 7, radius: 3.5, every: 0.2, ahead: 7 },
+    landTime: 2.2,
+    takeoffTime: 1.8,
+    groundTime: [14, 20],  // seconds on the ground before flying again
+    takeoffAfterDamage: 0.22, // fraction of max hp lost on the ground triggers take-off
+    walkSpeed: 3.2,
+    turnSpeed: 1.6,
+    attackGap: [1.0, 2.0],
+    bite: { windup: 0.8, time: 0.5, damage: 26, reach: 4.2, arc: 0.6 },
+    tail: { windup: 0.6, time: 0.6, damage: 18, reach: 6.5 },
+    fire: { windup: 0.9, time: 1.6, damage: 6, every: 0.25, range: 12, arc: 0.45 },
+    crashStagger: 4,       // seconds stunned after Unrelenting Force knocks it down
+    deathTime: 2.5,
+    soulTime: 3.5,
+  },
+
+  fx: {
+    maxParticles: 500,
   },
 
   save: {
