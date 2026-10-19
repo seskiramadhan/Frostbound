@@ -64,7 +64,7 @@ export function settleOnGround(body, dt, level, gravity) {
   if (p.y <= ground) { p.y = ground; body.vy = 0; body.grounded = true; }
 }
 
-// Push overlapping living bodies apart, half each.
+// Push overlapping living bodies apart, half each (fixed bodies, e.g. barricades, never move).
 export function separateBodies(bodies) {
   const list = [];
   for (const b of bodies) if (b.alive) list.push(b);
@@ -76,10 +76,12 @@ export function separateBodies(bodies) {
       if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
       const d = Math.hypot(dx, dz);
       if (d >= min) continue;
+      const fa = list[i].fixed, fb = list[j].fixed;
+      if (fa && fb) continue;
       const nx = d > 0 ? dx / d : 1, nz = d > 0 ? dz / d : 0;
-      const push = (min - d) / 2;
-      a.x -= nx * push; a.z -= nz * push;
-      b.x += nx * push; b.z += nz * push;
+      const ka = fa ? 0 : fb ? 1 : 0.5, kb = 1 - ka, gap = min - d;
+      a.x -= nx * gap * ka; a.z -= nz * gap * ka;
+      b.x += nx * gap * kb; b.z += nz * gap * kb;
     }
   }
 }

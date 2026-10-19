@@ -1,14 +1,47 @@
 // What each villager says, depending on quest progress. talk() returns
 // { text, options: [{ label, run }] }; run() changes state and returns true to keep the
 // conversation open (it is redrawn), or false to close it.
-// ctx: { quests, inventory, flags, player, trade(), rest(), done(msg), newGamePlus(), ng }
+// ctx: { quests, inventory, flags, player, trade(), rest(), done(msg), newGamePlus(), ng,
+//        jobs, jobOffer, isGuest, shopClosed }
 import { CONFIG } from '../config.js';
+import { RETURN_TEXT } from './jobs.js';
 
 const V = CONFIG.village;
 const bye = { label: 'Goodbye', run: () => false };
 
+// The Jarl's requests: offer / accept / report / give up (systems/jobs.js).
+function jarlJobs(c, o) {
+  const { quests: q, jobs } = c;
+  if (c.isGuest || !jobs.open) return;
+  if (q.stepText('jarlJob') === RETURN_TEXT) {
+    o.push({ label: 'The job is done.', run: () => {
+      const gold = jobs.gold;
+      jobs.paid = true;
+      c.done(`Good work. Here, ${gold} gold, as promised. Come back if you want more work.`); return true;
+    } });
+  } else if (q.isActive('jarlJob')) {
+    o.push({ label: 'I want to give up the job.', run: () => { jobs.abandon(); c.done('Hm. Someone else will have to do it, then.'); return true; } });
+  } else {
+    o.push({ label: 'Any work for me?', run: () => {
+      c.jobOffer = jobs.offer();
+      if (!c.jobOffer) c.done('Nothing right now. Come back later.');
+      return true;
+    } });
+  }
+}
+
 function jarl(c) {
   const { quests: q, flags, inventory: inv } = c;
+  if (c.jobOffer) {                       // the Jarl just described a job
+    const offer = c.jobOffer;
+    return {
+      text: `${offer.pitch} I'll pay ${c.jobs.gold} gold.`,
+      options: [
+        { label: 'I\'ll do it.', run: () => { c.jobOffer = null; c.jobs.accept(offer.type); c.done('Good. Come back when it\'s done.'); return true; } },
+        { label: 'Not now.', run: () => { c.jobOffer = null; return true; } },
+      ],
+    };
+  }
   const o = [];
   let text;
   if (q.isActive('arrival')) {
@@ -50,6 +83,7 @@ function jarl(c) {
   } else {
     text = 'Welcome to Frosthollow. Keep your blade sharp; these are hard days.';
   }
+  jarlJobs(c, o);
   if (q.isActive('jarlLetter') && inv.count('jarlLetter')) {
     o.push({ label: 'Bera sent you this letter.', run: () => {
       inv.remove('jarlLetter'); flags.letterDelivered = true;
@@ -61,6 +95,9 @@ function jarl(c) {
 }
 
 function merchant(c) {
+  if (c.shopClosed) {
+    return { text: 'The raiders burned my stall and took half my stock. Come back once I\'ve rebuilt.', options: [bye] };
+  }
   return {
     text: 'Furs, steel, potions, even a spell tome if you have the head for magic. I buy what you can carry and sell what you can afford.',
     options: [{ label: 'Let me trade.', run: () => { c.trade(); return true; } }, bye],

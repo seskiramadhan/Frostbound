@@ -343,7 +343,7 @@ export class Dragon {
   #retarget() {
     let best = null, bestD = Infinity;
     for (const e of this.entities) {
-      if (e.team !== 'player' || !e.alive || e.level !== this.level) continue;
+      if (e.kind !== 'player' || !e.alive || e.level !== this.level) continue;   // players only, not guards/barricades
       const d = (e.pos.x - this.pos.x) ** 2 + (e.pos.z - this.pos.z) ** 2;
       if (d < bestD) { bestD = d; best = e; }
     }

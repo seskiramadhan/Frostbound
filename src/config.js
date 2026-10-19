@@ -269,6 +269,7 @@ export const CONFIG = {
     ironArmor:   { name: 'Iron Armor', type: 'armor', armor: 30, value: 120, color: 0x7d838c },
     longbow:     { name: 'Hunter\'s Longbow', type: 'bow', damage: 24, value: 110 },
     fireTome:    { name: 'Spell Tome: Fire', type: 'tome', spell: 'fire', value: 40 },
+    warlordAxe:  { name: 'Warlord\'s Axe', type: 'weapon', damage: 27, value: 180, color: 0x9a8a70, length: 1.0 },
     ancestorBlade: { name: 'Ancestor\'s Blade', type: 'quest', value: 0 },
     jarlLetter:  { name: 'Sealed Letter', type: 'quest', value: 0 },
     wolfPelt:    { name: 'Wolf Pelt', type: 'misc', value: 8 },
@@ -446,6 +447,44 @@ export const CONFIG = {
     tierLoot: { items: { healPotion: 2 }, goldPerTier: 80 },
     ngHp: 0.5,               // New Game+: +50% enemy health per NG level
     ngDmg: 0.3,
+  },
+
+  // Raids on Frosthollow: started by the player (village bell, or the Jarl's "Defend" job).
+  // Raiders march in along lanes, break barricades, fight guards and players. 3 waves.
+  raid: {
+    center: [0, 2],          // where raiders head for
+    lanes: [                 // spawn point at the forest edge -> barricade on the village edge
+      { spawn: [64, 4], barricade: [21, 4] },
+      { spawn: [-64, 4], barricade: [-21, 4] },
+      { spawn: [0, 62], barricade: [0, 22] },
+    ],
+    waves: [{ wolf: 4 }, { draugr: 5 }, { draugr: 3, warlord: 1 }],
+    warning: 8,              // seconds after ringing the bell before wave 1
+    wavePause: 6,            // seconds between waves
+    hpPerLevel: 0.25,        // each raid won makes the next tougher
+    dmgPerLevel: 0.15,
+    barricadeHp: 160,
+    repairCost: 15,          // gold to fix one barricade
+    reward: { gold: 150, goldPerLevel: 75, firstWinItem: 'warlordAxe' },
+    shopClosed: 300,         // seconds Ingrid's shop stays shut after a lost raid
+    guards: [[15, 6], [-15, 6]],
+    bell: [-4.5, 3.5],
+    tower: { x: 4, z: 17, height: 5, size: 3.2 },
+    // Creature overrides (on top of wolf / draugr) for raiders and guards
+    raider: { raider: true, leashRadius: 999, detectRadius: 20, loseRadius: 30, wanderRadius: 5, healRate: 0, corpseTime: 6, marchSpeed: 3.2 },
+    warlord: { name: 'Draugr Warlord', body: 'draugr', boss: true, fur: 0x5d6866, metal: 0x2e2a26, eye: 0xff7a3a, scale: 1.4,
+      maxHealth: 260, radius: 0.6, biteDamage: 24, biteReach: 2.4, attackRange: 2.6, windup: [0.8, 1.1] },
+    guard: { name: 'Village Guard', body: 'draugr', team: 'player', hunts: 'beast', fur: 0xd9b08c, rag: 0x5a2a28, metal: 0x8a9098,
+      eye: 0x2a2018, hunch: 0, maxHealth: 120, biteDamage: 10, detectRadius: 16, loseRadius: 22, leashRadius: 20,
+      wanderRadius: 2, healRate: 2, walkSpeed: 1.6, runSpeed: 4.6, attackersAtOnce: 2, corpseTime: 99 },
+  },
+
+  // The Jarl's requests: one repeatable job at a time, paid on return
+  jobs: {
+    baseGold: 60,
+    goldPerJob: 25,          // each finished job pays more...
+    maxGold: 400,            // ...up to this
+    wolvesToHunt: 3,
   },
 
   // Co-op dragon hunts (N3): each hunt level makes the next dragon tougher.

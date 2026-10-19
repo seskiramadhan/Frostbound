@@ -3,8 +3,10 @@
 // Emits 'questStarted', 'questStep' and 'questDone'.
 // Save compatibility: only ever APPEND steps to an existing quest (step indices are saved).
 import { CONFIG } from '../config.js';
+import { RETURN_TEXT } from './jobs.js';
 
 const V = CONFIG.village;
+let W = null;   // the world, for the Jarl's request (its text changes with the job)
 const jarl = w => ({ level: w.valley, pos: w.npc('jarl') });
 
 // target(world) returns { level, pos } for the objective marker, or null.
@@ -53,6 +55,16 @@ export const QUESTS = {
     reward: w => w.inventory.addGold(CONFIG.worldEater.reward),
   },
 
+  // The Jarl's repeatable requests (systems/jobs.js picks the job; restarted for each new one)
+  jarlJob: {
+    name: 'Jarl\'s Request',
+    steps: [
+      { get text() { return W?.jobs.text() ?? 'Do the Jarl\'s job'; }, done: w => w.jobs.isComplete(), target: w => w.jobs.target(w) },
+      { text: RETURN_TEXT, done: w => w.jobs.paid, target: jarl },
+    ],
+    reward: w => w.jobs.payout(),
+  },
+
   // Side quests, given by villagers
   hunterPelts: {
     name: 'Pelts for the Hunter',
@@ -97,6 +109,7 @@ export class Quests {
   constructor(events, world) {
     this.events = events;
     this.world = world;
+    W = world;
     this.state = {};      // id -> { step, done }
     this.tracked = null;  // quest shown on the HUD (null = first active main quest)
   }
@@ -123,6 +136,18 @@ export class Quests {
         }
       }
     }
+  }
+
+  // Start a repeatable quest again from its first step.
+  restart(id) {
+    this.abandon(id);
+    this.start(id);
+  }
+
+  // Drop a quest (failed or given up).
+  abandon(id) {
+    delete this.state[id];
+    if (this.tracked === id) this.tracked = null;
   }
 
   has(id) { return !!this.state[id]; }

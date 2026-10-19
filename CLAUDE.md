@@ -130,12 +130,13 @@ src/
   camera.js            # third-person orbit camera (pulls in at walls, shake)
   world/               # terrain, props, environment (fog/light/snow), dungeon (ASCII maps,
                        # entrances, word walls), village (Frosthollow), summit (boss arena),
-                       # chest, fx (particles)
+                       # defenses (barricades, bell, watchtower), chest, fx (particles)
   entities/            # player, creature (wolf/draugr AI) + wolfModel/draugrModel,
                        # dragon, npc (villagers), remotePlayer (co-op), model (helpers)
   systems/             # events, entities (id registry), physics, combat, inventory,
                        # skills, shouts, projectiles (arrows), magic (fire), stealth
-                       # (meter, witnesses), quests, dialogue, save
+                       # (meter, witnesses), raid (waves, guards), jobs (Jarl's requests),
+                       # quests, dialogue, save
   ui/                  # hud, menu (Bag: Items/Shouts/Skills/Quests/Co-op), dialog, coop panel
   version.js, updater.js # build number + update check; one-click update past the cache
   net/                 # transport (interface) + peerTransport, protocol, session,
@@ -158,7 +159,14 @@ src/
   `tier` (tougher enemies, better chests), Ice Form secret wall, New Game+ (`ng` in the save;
   keeps skills, scales enemies via `CONFIG.postGame`).
 - **Creatures** share one AI (`entities/creature.js`); a config section picks the body
-  (`body: 'wolf' | 'draugr'`). Bosses have `boss: true` + `saveKey`.
+  (`body: 'wolf' | 'draugr'`). Bosses have `boss: true` + `saveKey`. `team`/`hunts` make
+  guards (team 'player', hunting 'beast'); `raider: true` marches on the village and hits barricades.
+- **Raids** (`systems/raid.js`): all raiders, guards and barricades are created at startup (fixed
+  entity ids for co-op) and reused; the host runs waves and emits 'raid' events. Barricades are
+  entities (`kind: 'barricade'`, `fixed`); dragons only target `kind: 'player'`. The valley has
+  `platforms` (watchtower top) that `heightAt` stands on.
+- **Jarl's requests** (`systems/jobs.js`): repeatable quest `jarlJob`, restarted per job
+  (`quests.restart`), text from the current job.
 - **Hits/deaths go through the event bus** (`attack`, `areaAttack`, `damage`, `blocked`,
   `death`, each with `source`: melee/arrow/shout/fire). Skills, HUD, loot and co-op listen.
 - **Sneak:** creatures notice a crouching player gradually (`notice`); `unaware` (state
