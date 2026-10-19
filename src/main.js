@@ -281,13 +281,17 @@ function frame(now) {
   if (snow.points.visible) snow.update(dt, renderPos);
 
   // Objective + marker (points at the door when the target is on another level)
-  const obj = started ? quests.active() : null;
-  hud.setObjective(obj);
+  let obj = started ? quests.active() : null;
   let mark = null;
   if (obj?.target) {
     if (obj.target.level === player.level) mark = obj.target.pos;
     else mark = player.level === den ? den.exit : entrance.front;
+  } else if (started && player.level === den) {
+    // Nothing left to do down here: show the way out
+    obj = { name: den.name, text: `Leave ${den.name}` };
+    mark = den.exit;
   }
+  hud.setObjective(obj);
   hud.setMarker(mark, camera, player.pos);
 
   hud.frame(dt, player);
