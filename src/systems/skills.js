@@ -3,7 +3,7 @@
 import { CONFIG } from '../config.js';
 
 const K = CONFIG.skills;
-export const SKILL_IDS = ['oneHanded', 'block'];
+export const SKILL_IDS = ['oneHanded', 'archery', 'block'];
 
 export function xpToNext(level) {
   return K.xpBase * K.xpGrowth ** (level - 1);
@@ -13,7 +13,11 @@ export class Skills {
   constructor(events, player) {
     this.events = events;
     this.reset();
-    events.on('damage', ({ attacker }) => { if (attacker === player) this.addXp('oneHanded', K.oneHanded.xpPerHit); });
+    events.on('damage', ({ attacker, source }) => {
+      if (attacker !== player) return;
+      if (source === 'melee') this.addXp('oneHanded', K.oneHanded.xpPerHit);
+      else if (source === 'arrow') this.addXp('archery', K.archery.xpPerHit);
+    });
     events.on('blocked', ({ target }) => { if (target === player) this.addXp('block', K.block.xpPerBlock); });
   }
 
@@ -51,12 +55,17 @@ export function applyStats(player, inventory, skills) {
   const I = CONFIG.items, B = CONFIG.combat.block;
   const weapon = I[inventory.equipped.weapon] ?? I.ironSword;
   const armor = I[inventory.equipped.armor] ?? I.clothes;
-  const oh = K.oneHanded, bl = K.block;
+  const oh = K.oneHanded, bl = K.block, ar = K.archery;
+  const bow = I[inventory.equipped.bow];
 
   player.attackDamage = weapon.damage * (1 + oh.damagePerLevel * (skills.level('oneHanded') - 1))
     * (skills.maxed('oneHanded') ? oh.perk.damageMul : 1);
   player.armor = armor.armor;
   player.blockReduction = Math.min(0.95, B.reduction + bl.reductionPerLevel * (skills.level('block') - 1));
   player.blockStaminaMul = skills.maxed('block') ? bl.perk.staminaMul : 1;
+  player.hasBow = !!bow && inventory.count(inventory.equipped.bow) > 0;
+  player.bowDamage = bow ? bow.damage * (1 + ar.damagePerLevel * (skills.level('archery') - 1))
+    * (skills.maxed('archery') ? ar.perk.damageMul : 1) : 0;
+  if (!player.hasBow) player.bowMode = false;
   player.setLook(weapon, armor);
 }

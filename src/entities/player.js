@@ -1,5 +1,5 @@
 // The player: low-poly Nord with a sword, camera-relative movement on the current level (valley or dungeon).
-// States: move, block, attack, stagger, dead. Driven by one command object per tick.
+// States: move, block, attack, draw (bow), shot, shout, stagger, dead. Driven by one command object per tick.
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { box, blobShadow, Flash, lerpAngle, lerp, clamp01 } from './model.js';
@@ -7,7 +7,7 @@ import { moveBody, pushOutOfColliders, settleOnGround, turnToward } from '../sys
 import { inArc } from '../systems/combat.js';
 
 const P = CONFIG.player, S = CONFIG.stats, CB = CONFIG.combat;
-const A = CB.attack, B = CB.block, J = CB.jump, AIM = CB.autoAim;
+const A = CB.attack, B = CB.block, J = CB.jump, AIM = CB.autoAim, BW = CONFIG.bow;
 
 // Exported so co-op remote players can reuse the same look.
 export function buildModel() {
@@ -56,8 +56,21 @@ export function buildModel() {
   sword.add(blade);
   arms[0].add(sword);
 
+  // Hunting bow in the left hand (shown in bow mode). Grip at the hand, limbs along local z.
+  const bow = new THREE.Group();
+  bow.position.set(0, -0.68, 0);
+  bow.rotation.y = Math.PI / 2;
+  const R = 0.6, ARC = Math.PI * 0.75;
+  const limbs = new THREE.Mesh(new THREE.TorusGeometry(R, 0.035, 4, 10, ARC), new THREE.MeshLambertMaterial({ color: 0x6a4a2a, flatShading: true }));
+  limbs.rotation.z = -Math.PI / 2 - ARC / 2;
+  limbs.position.y = R;
+  bow.add(limbs);
+  bow.add(box(2 * R * Math.sin(ARC / 2), 0.012, 0.012, 0xe8e0c8, 0, R - R * Math.cos(ARC / 2), 0));   // string
+  bow.visible = false;
+  arms[1].add(bow);
+
   const shadow = blobShadow(0.55);
-  return { root, body, legs, arms, sword, blade, tunic, shadow };
+  return { root, body, legs, arms, sword, blade, tunic, bow, shadow };
 }
 
 export class Player {
@@ -85,6 +98,10 @@ export class Player {
     this.armor = 0;
     this.blockReduction = B.reduction;
     this.blockStaminaMul = 1;
+    this.bowDamage = 0;
+    this.hasBow = false;
+    this.bowMode = false;
+    this.aimHeight = 1.2;
 
     const [sx, sz] = P.spawn;
     this.respawn(level, new THREE.Vector3(sx, 0, sz), Math.PI);
@@ -120,12 +137,20 @@ export class Player {
 
   #setState(s) { this.state = s; this.stateTime = 0; }
 
+  // Can a shout start now? (main checks the shout cooldown separately)
+  get canShout() { return this.alive && ['move', 'block', 'draw'].includes(this.state); }
+  startShout(base) {
+    this.facing = this.prevFacing = this.#autoAim(base, 10, 1.0);   // turn to the nearest enemy roughly ahead
+    this.drawTime = 0;
+    this.#setState('shout');
+  }
+
   #spend(cost) {
     this.stamina = Math.max(0, this.stamina - cost);
     this.staminaDelay = S.staminaRegenDelay;
   }
 
-  // Fixed-step update. cmd = { move: {x, y}, run, attack, block, jump }, yaw = camera yaw.
+  // Fixed-step update. cmd = { move: {x, y}, run, attack, block, draw, jump, toggleBow }, yaw = camera yaw.
   tick(dt, cmd, yaw) {
     this.prevPos.copy(this.pos);
     this.prevFacing = this.facing;
@@ -147,7 +172,15 @@ export class Player {
     const mx = fx * cmd.move.y + rx * cmd.move.x;     // wanted direction (world, length 0..1)
     const mz = fz * cmd.move.y + rz * cmd.move.x;
 
+    if (cmd.toggleBow && this.hasBow && ['move', 'block'].includes(this.state)) {
+      this.bowMode = !this.bowMode;
+      this.events.emit('bowToggled', { bowMode: this.bowMode });
+    }
     this.#advanceState();
+    if (this.state === 'draw') {
+      this.drawTime += dt;
+      if (!cmd.draw) this.#shoot(this.drawTime);
+    }
     if (this.state === 'move' || this.state === 'block') this.#chooseAction(cmd, mx, mz, camFacing);
 
     let wx = 0, wz = 0, turnTo = null, turnSpeed = P.turnSpeed;
@@ -163,6 +196,10 @@ export class Player {
         break;
       case 'attack':
         turnTo = this.attackFacing; turnSpeed = A.turnSpeed;
+        break;
+      case 'draw':
+        wx = mx * P.walkSpeed * BW.moveMul; wz = mz * P.walkSpeed * BW.moveMul;
+        turnTo = camFacing; turnSpeed = A.turnSpeed;
         break;
     }
 
@@ -195,12 +232,27 @@ export class Player {
       if (t >= A.windup + A.recover) this.#setState('move');
     } else if (this.state === 'stagger') {
       if (t >= this.staggerTime) this.#setState('move');
+    } else if (this.state === 'shot') {
+      if (t >= 0.25) this.#setState('move');
+    } else if (this.state === 'shout') {
+      if (t >= 0.5) this.#setState('move');
     }
+  }
+
+  // Release an arrow. Power grows with draw time; main.js aims it and spawns the projectile.
+  #shoot(drawTime) {
+    const k = Math.min(1, Math.max(0, (drawTime - BW.minDraw) / (BW.fullDraw - BW.minDraw)));
+    const power = BW.minPower + (1 - BW.minPower) * k;
+    this.events.emit('shootArrow', { shooter: this, power, damage: this.bowDamage * power });
+    this.#setState('shot');
   }
 
   // From move/block: start an attack or jump, else settle on move/block.
   #chooseAction(cmd, mx, mz, camFacing) {
-    if (this.attackBuffer > 0 && this.grounded) {
+    if (this.bowMode) {
+      if (cmd.draw && this.grounded) { this.drawTime = 0; this.#setState('draw'); return; }
+      if (this.attackBuffer > 0 && this.grounded) { this.attackBuffer = 0; this.#shoot(0); return; }   // quick tap
+    } else if (this.attackBuffer > 0 && this.grounded) {
       this.#spend(A.staminaCost);
       this.attackBuffer = 0;
       this.struck = false;
@@ -215,7 +267,7 @@ export class Player {
       this.vy = J.velocity;
       this.grounded = false;
     }
-    const want = cmd.block && this.grounded ? 'block' : 'move';
+    const want = cmd.block && this.grounded && !this.bowMode ? 'block' : 'move';
     if (want !== this.state) this.#setState(want);
   }
 
@@ -310,8 +362,30 @@ export class Player {
     body.rotation.set(0, 0, 0);
     body.position.y = Math.abs(Math.cos(this.walkPhase)) * 0.05 * walk;
 
+    this.model.sword.visible = !this.bowMode;
+    this.model.bow.visible = this.bowMode;
+    if (this.bowMode && this.state !== 'draw' && this.state !== 'shot') armL.rotation.x = -0.5 + swing * 0.4;
+
     const t = this.stateTime;
     switch (this.state) {
+      case 'draw': {
+        const k = clamp01(this.drawTime / BW.fullDraw);
+        armL.rotation.set(-1.55, 0, -0.15);                     // bow arm straight out
+        armR.rotation.set(-1.45, 0, lerp(-0.2, -1.1, k));       // string hand pulled back
+        body.rotation.y = -0.25;
+        break;
+      }
+      case 'shot':
+        armL.rotation.set(-1.55, 0, -0.15);
+        armR.rotation.set(-1.2, 0, -0.3);
+        break;
+      case 'shout': {
+        const k = Math.sin(clamp01(t / 0.5) * Math.PI);
+        body.rotation.x = 0.35 * k;
+        armR.rotation.set(0.6 * k, 0, 0.5 * k);
+        armL.rotation.set(0.6 * k, 0, -0.5 * k);
+        break;
+      }
       case 'attack': {
         if (t < A.windup) {
           armR.rotation.x = lerp(-0.45, -2.7, clamp01(t / A.windup));

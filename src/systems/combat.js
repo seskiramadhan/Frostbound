@@ -1,5 +1,6 @@
 // Resolves 'attack' events into hits: distance + swing arc, frontal block.
-// Emits 'damage', 'blocked' and 'death'. In co-op only the host runs this.
+// Emits 'damage', 'blocked' and 'death' (each with `source`: melee | arrow | shout).
+// Also 'areaAttack': everything hostile within a radius of a point. In co-op only the host runs this.
 import { CONFIG } from '../config.js';
 
 const B = CONFIG.combat.block;
@@ -19,6 +20,7 @@ export class Combat {
     this.events = events;
     this.entities = entities;
     events.on('attack', a => this.#resolve(a));
+    events.on('areaAttack', a => this.#resolveArea(a));
   }
 
   #resolve({ attacker, damage, reach, arc }) {
@@ -28,18 +30,27 @@ export class Combat {
     }
   }
 
-  applyHit(attacker, target, damage) {
+  // { attacker, x, y, z, radius, damage }: ground-level blast (dragon fire, tail sweep).
+  #resolveArea({ attacker, x, y, z, radius, damage }) {
+    for (const t of this.entities) {
+      if (t === attacker || !t.alive || t.team === attacker.team) continue;
+      if (Math.abs(t.pos.y - y) > 3) continue;
+      if (Math.hypot(t.pos.x - x, t.pos.z - z) <= radius + t.radius) this.applyHit(attacker, t, damage);
+    }
+  }
+
+  applyHit(attacker, target, damage, source = 'melee') {
     const ev = this.events;
     const blocked = !!target.blocking && inArc(target, attacker, Infinity, B.arc);
     let amount = blocked ? damage * (1 - (target.blockReduction ?? B.reduction)) : damage;
     if (target.mitigate) amount = target.mitigate(amount);
     target.hp = Math.max(0, target.hp - amount);
     target.onHit({ amount, attacker, blocked });
-    ev.emit(blocked ? 'blocked' : 'damage', { target, attacker, amount });
+    ev.emit(blocked ? 'blocked' : 'damage', { target, attacker, amount, source });
 
     if (target.hp <= 0) {
       target.die(attacker);
-      ev.emit('death', { target, killer: attacker });
+      ev.emit('death', { target, killer: attacker, source });
     }
   }
 }

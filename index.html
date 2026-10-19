@@ -64,7 +64,7 @@
   #st-wrap.full { opacity: 0.35; }
 
   #target {
-    position: fixed; left: 50%; top: max(14px, env(safe-area-inset-top)); transform: translateX(-50%);
+    position: fixed; left: 50%; top: calc(max(14px, env(safe-area-inset-top)) + 56px); transform: translateX(-50%);
     width: min(50vw, 300px); z-index: 4; pointer-events: none; text-align: center; opacity: 0; transition: opacity 0.3s;
     font-size: 13px; letter-spacing: 0.15em; text-transform: uppercase; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
   }
@@ -103,7 +103,7 @@
   #q-text { font-size: 14px; margin-top: 2px; }
   #q-text::before { content: '\25C7  '; color: #e8c86a; }
   #toasts {
-    position: fixed; left: max(12px, env(safe-area-inset-left)); top: calc(max(10px, env(safe-area-inset-top)) + 46px);
+    position: fixed; left: max(12px, env(safe-area-inset-left)); top: calc(max(10px, env(safe-area-inset-top)) + 100px);
     z-index: 4; pointer-events: none; display: flex; flex-direction: column; gap: 3px; font-size: 13px;
   }
   .toast { text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); transition: opacity 0.7s; }
@@ -168,6 +168,33 @@
   .m-skill .m-stat { margin-top: 5px; white-space: normal; }
   .perk-on { color: #e8c86a; opacity: 1; }
   .m-hint { font-size: 12px; font-style: italic; opacity: 0.5; padding: 12px 16px 0; }
+  /* Phase 4: shouts, bow, slow time, boss bar */
+  #btn-shout {
+    right: max(18px, env(safe-area-inset-right)); bottom: max(170px, calc(env(safe-area-inset-bottom) + 152px));
+    --cd: 100%; font-size: 14px; letter-spacing: 0.15em;
+    background: conic-gradient(rgba(159, 216, 255, 0.35) var(--cd), rgba(20, 28, 36, 0.35) var(--cd));
+  }
+  #btn-shout.ready { border-color: #9fd8ff; box-shadow: 0 0 10px rgba(159, 216, 255, 0.45); }
+  #btn-bow { right: max(96px, calc(env(safe-area-inset-right) + 78px)); bottom: max(170px, calc(env(safe-area-inset-bottom) + 152px)); display: none; }
+  #shout-ind {
+    position: fixed; right: 14px; bottom: 18px; z-index: 4; pointer-events: none; display: none; --cd: 100%;
+    padding: 6px 12px; font-size: 13px; letter-spacing: 0.08em; border: 1px solid rgba(242, 239, 230, 0.35);
+    background: linear-gradient(90deg, rgba(159, 216, 255, 0.3) var(--cd), rgba(10, 14, 18, 0.45) var(--cd));
+  }
+  #shout-ind.ready { border-color: #9fd8ff; }
+  #slowmo {
+    position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: 0; transition: opacity 0.4s;
+    background: radial-gradient(ellipse at center, rgba(120, 170, 220, 0) 40%, rgba(90, 140, 200, 0.35)); mix-blend-mode: multiply;
+  }
+  #slowmo.on { opacity: 1; }
+  #boss {
+    position: fixed; left: 50%; top: calc(max(14px, env(safe-area-inset-top)) + 56px); transform: translateX(-50%);
+    width: min(70vw, 420px); z-index: 4; pointer-events: none; display: none; text-align: center;
+    font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+  }
+  #boss .bar { margin-top: 3px; height: 8px; }
+  #boss-hp { background: linear-gradient(#d0543c, #8e2a1c); }
+  .m-desc { padding-top: 0; margin-top: -4px; }
 </style>
 </head>
 <body>
@@ -185,6 +212,8 @@
       <tr><td>Right click</td><td>Block (hold)</td></tr>
       <tr><td>Space</td><td>Jump</td></tr>
       <tr><td>E</td><td>Interact</td></tr>
+      <tr><td>Q</td><td>Shout</td></tr>
+      <tr><td>B</td><td>Bow / sword</td></tr>
       <tr><td>I / Tab</td><td>Inventory</td></tr>
       <tr><td>Esc</td><td>Pause</td></tr>
     </table>
@@ -194,6 +223,7 @@
       <tr><td>Tap right</td><td>Attack</td></tr>
       <tr><td>Hold right</td><td>Block</td></tr>
       <tr><td>Bag</td><td>Inventory</td></tr>
+      <tr><td>Bow mode</td><td>Hold right to draw, release to shoot</td></tr>
     </table>
   </div>
 </div>
@@ -209,6 +239,11 @@
 <button class="tbtn" id="btn-jump">Jump</button>
 <button class="tbtn" id="btn-interact">Use</button>
 <button class="tbtn" id="btn-bag">Bag</button>
+<button class="tbtn" id="btn-shout"></button>
+<button class="tbtn" id="btn-bow">Bow</button>
+<div id="shout-ind"></div>
+<div id="slowmo"></div>
+<div id="boss"><span id="boss-name"></span><div class="bar"><i id="boss-hp"></i></div></div>
 <div id="objective"><div id="q-name"></div><div id="q-text"></div></div>
 <div id="toasts"></div>
 <div id="notice"></div>
@@ -218,6 +253,7 @@
   <div class="m-panel">
     <div class="m-top">
       <button class="tab on" data-tab="items">Items</button>
+      <button class="tab" data-tab="shouts">Shouts</button>
       <button class="tab" data-tab="skills">Skills</button>
       <span id="menu-gold"></span>
       <button id="menu-close" aria-label="Close">&#x2715;</button>

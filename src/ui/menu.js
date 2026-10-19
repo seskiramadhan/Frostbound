@@ -1,22 +1,24 @@
 // Inventory + skills menu. Opening it pauses the game (single player).
 import { CONFIG } from '../config.js';
 import { SKILL_IDS } from '../systems/skills.js';
+import { SHOUT_IDS } from '../systems/shouts.js';
 
 const $ = id => document.getElementById(id);
-const TYPE_NAMES = { weapon: 'Weapons', armor: 'Apparel', potion: 'Potions', misc: 'Misc' };
+const TYPE_NAMES = { weapon: 'Weapons', bow: 'Bows', armor: 'Apparel', potion: 'Potions', misc: 'Misc' };
 
 function stat(def) {
-  if (def.type === 'weapon') return `Damage ${def.damage}`;
+  if (def.type === 'weapon' || def.type === 'bow') return `Damage ${def.damage}`;
   if (def.type === 'armor') return `Armor ${def.armor}`;
   if (def.type === 'potion') return `Restores ${def.heal} health`;
   return `Value ${def.value}`;
 }
 
 export class Menu {
-  constructor(inventory, skills, player) {
+  constructor(inventory, skills, player, shouts) {
     this.inventory = inventory;
     this.skills = skills;
     this.player = player;
+    this.shouts = shouts;
     this.el = $('menu');
     this.list = $('menu-list');
     this.goldEl = $('menu-gold');
@@ -39,7 +41,9 @@ export class Menu {
     for (const b of document.querySelectorAll('#menu .tab')) b.classList.toggle('on', b.dataset.tab === this.tab);
     this.goldEl.textContent = `${this.inventory.gold} gold`;
     this.list.innerHTML = '';
-    if (this.tab === 'items') this.#renderItems(); else this.#renderSkills();
+    if (this.tab === 'items') this.#renderItems();
+    else if (this.tab === 'shouts') this.#renderShouts();
+    else this.#renderSkills();
   }
 
   #row(cls) {
@@ -70,6 +74,25 @@ export class Menu {
     this.#row('m-hint').textContent = 'Tap an item to equip or drink it.';
   }
 
+  #renderShouts() {
+    const sh = this.shouts;
+    if (!sh.known.size) this.#row('m-hint').textContent = 'You know no Words of Power yet. Find a word wall.';
+    for (const id of SHOUT_IDS) {
+      if (!sh.known.has(id)) continue;
+      const def = CONFIG.shouts[id], sel = sh.selected === id;
+      const r = this.#row('m-item usable' + (sel ? ' equipped' : ''));
+      const name = document.createElement('span');
+      name.textContent = `${def.word} · ${def.name}`;
+      const info = document.createElement('span');
+      info.className = 'm-stat';
+      info.textContent = `${def.cooldown}s${sel ? ' · Selected' : ''}`;
+      r.append(name, info);
+      r.addEventListener('click', () => { sh.select(id); this.render(); });
+      this.#row('m-hint m-desc').textContent = def.desc;
+    }
+    if (sh.known.size) this.#row('m-hint').textContent = 'Tap a shout to select it, then use the Shout button (Q).';
+  }
+
   #renderSkills() {
     const K = CONFIG.skills;
     for (const id of SKILL_IDS) {
@@ -87,6 +110,6 @@ export class Menu {
       perk.textContent = `Perk at max: ${K[id].perk.name} (${K[id].perk.desc})`;
       r.append(top, bar, perk);
     }
-    this.#row('m-hint').textContent = 'Skills grow by use: land sword hits for One-Handed, block bites for Block.';
+    this.#row('m-hint').textContent = 'Skills grow by use: sword hits for One-Handed, arrow hits for Archery, blocked hits for Block.';
   }
 }

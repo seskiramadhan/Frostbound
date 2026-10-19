@@ -1,7 +1,7 @@
 // Dungeons built from an ASCII tile map: one merged cave mesh with brazier light
 // baked into vertex colours (no real lights needed), wall collision, line of sight.
-// Map legend:  # rock   . floor   X exit   S player start   t brazier
-//              w wolf   A alpha wolf   c / C chests (keys in `chests`)
+// Map legend:  # rock   . floor   X exit   S player start   t brazier   W word wall
+//              other letters: creatures (`spawns`: letter -> config section) or chests (`chests`)
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { mulberry32 } from './noise.js';
@@ -11,7 +11,12 @@ const D = CONFIG.dungeon;
 export const FROSTFANG_DEN = {
   name: 'Frostfang Den',
   key: 'den',
+  origin: [1000, 0, 1000],   // each dungeon gets its own patch of space far outside the valley
+  spawns: { w: 'wolf', A: 'alphaWolf' },
   chests: { c: 'denHall', C: 'denTreasure' },
+  wordWall: { shout: 'slowTime', facing: Math.PI },
+  palette: { floor: 0x5b5047, wall: 0x6b6259, ceiling: 0x48413b },
+  roughness: 0.55,
   map: [
     '#####################',
     '#####.....###########',
@@ -33,8 +38,41 @@ export const FROSTFANG_DEN = {
     '########....A....####',
     '########.t.....t.####',
     '#########...C...#####',
-    '##########.....######',
+    '##########..W..######',
     '#####################',
+  ],
+};
+
+export const BLEAKROCK_BARROW = {
+  name: 'Bleakrock Barrow',
+  key: 'barrow',
+  origin: [1200, 0, 1000],
+  spawns: { d: 'draugr', D: 'draugrWight' },
+  chests: { c: 'barrowHall' },
+  wordWall: { shout: 'push', facing: Math.PI },
+  palette: { floor: 0x57595b, wall: 0x6c7074, ceiling: 0x45484c },
+  roughness: 0.22,          // worked stone, not raw cave
+  map: [
+    '###################',
+    '######.......######',
+    '######..X.S..######',
+    '######.......######',
+    '#######.t.t.#######',
+    '########...########',
+    '########...########',
+    '####...........####',
+    '####.t..d.d..t.####',
+    '####...........####',
+    '####.....c.....####',
+    '########...########',
+    '########...########',
+    '#####.........#####',
+    '#####.t.....t.#####',
+    '#####....D....#####',
+    '#####...d.....#####',
+    '#######.....#######',
+    '#######..W..#######',
+    '###################',
   ],
 };
 
@@ -52,15 +90,15 @@ export class Dungeon {
     this.name = def.name;
     this.key = def.key;
     this.cell = D.cell;
-    this.ox = D.origin[0];
-    this.oz = D.origin[2];
+    this.ox = def.origin[0];
+    this.oz = def.origin[2];
     this.rows = def.map.length;
     this.cols = Math.max(...def.map.map(r => r.length));
     this.ceiling = D.wallHeight;
     this.colliders = [];
-    this.wolves = [];      // positions from the map
-    this.alpha = null;
+    this.spawns = {};      // config section -> [positions]
     this.chests = [];      // { pos, lootKey }
+    this.wordWall = null;  // { pos, facing, shout }
     this.braziers = [];
 
     for (let j = 0; j < this.rows; j++) {
@@ -68,14 +106,48 @@ export class Dungeon {
         const ch = this.#ch(i, j), p = this.cellCenter(i, j);
         if (ch === 'S') this.start = p;
         else if (ch === 'X') this.exit = p;
-        else if (ch === 'w') this.wolves.push(p);
-        else if (ch === 'A') this.alpha = p;
+        else if (def.spawns[ch]) (this.spawns[def.spawns[ch]] ??= []).push(p);
+        else if (ch === 'W') this.wordWall = { pos: p, ...def.wordWall };
         else if (ch === 't') { this.braziers.push(p); this.colliders.push({ x: p.x, z: p.z, r: 0.55 }); }
         else if (def.chests[ch]) this.chests.push({ pos: p, lootKey: def.chests[ch] });
       }
     }
     this.group = new THREE.Group();
     this.group.add(this.#buildCave(), this.#buildBraziers());
+    if (this.wordWall) this.group.add(this.#buildWordWall());
+  }
+
+  // Curved stone slab carved with glowing runes. Colliders keep you from walking through it.
+  #buildWordWall() {
+    const w = this.wordWall, g = new THREE.Group();
+    g.position.copy(w.pos);
+    g.rotation.y = w.facing;
+    const stone = new THREE.MeshLambertMaterial({ color: 0x7a7d80, flatShading: true });
+    this.runeMat = new THREE.MeshBasicMaterial({ color: 0x9fd8ff });
+    for (let k = -2; k <= 2; k++) {                       // 5 panels on a gentle curve
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(1.0, 3.4 - Math.abs(k) * 0.35, 0.45), stone);
+      panel.position.set(k * 0.95, (3.4 - Math.abs(k) * 0.35) / 2, Math.abs(k) * 0.28);
+      panel.rotation.y = -k * 0.22;
+      g.add(panel);
+      const rand = mulberry32(77 + k);
+      for (let r = 0; r < 4; r++) {                       // claw-mark runes
+        const rune = new THREE.Mesh(new THREE.BoxGeometry(0.08 + rand() * 0.25, 0.08 + rand() * 0.3, 0.05), this.runeMat);
+        rune.position.set(k * 0.95 + (rand() - 0.5) * 0.5, 0.7 + r * 0.6, Math.abs(k) * 0.28 + 0.24);
+        rune.rotation.set(0, -k * 0.22, (rand() - 0.5) * 1.2);
+        g.add(rune);
+      }
+    }
+    for (const k of [-1.8, 0, 1.8]) {
+      const c = Math.cos(w.facing), sn = Math.sin(w.facing);
+      this.colliders.push({ x: w.pos.x + k * c, z: w.pos.z - k * sn, r: 0.9 });
+    }
+    return g;
+  }
+
+  // Runes glow until the word is learned.
+  setWordLearned(learned) {
+    this.wordLearned = learned;
+    this.runeMat?.color.setHex(learned ? 0x3a4a55 : 0x9fd8ff);
   }
 
   #ch(i, j) {
@@ -113,7 +185,7 @@ export class Dungeon {
   // Rough rock: displace every vertex except the floor by a position hash.
   #displace(v, onFloor) {
     if (onFloor) return v;
-    const R = D.roughness;
+    const R = this.def.roughness;
     v.x += hash3(v.x, v.y, v.z) * R;
     v.z += hash3(v.z, v.x, v.y) * R;
     if (v.y > 0.1) v.y += hash3(v.y, v.z, v.x) * R * 0.6;
@@ -136,7 +208,8 @@ export class Dungeon {
     const c = this.cell, H = D.wallHeight, n = 2, s = c / n;   // 2 sub-quads per tile edge
     const pos = [], col = [];
     const rand = mulberry32(31337);
-    const floorC = new THREE.Color(0x5b5047), wallC = new THREE.Color(0x6b6259), ceilC = new THREE.Color(0x48413b);
+    const pal = this.def.palette;
+    const floorC = new THREE.Color(pal.floor), wallC = new THREE.Color(pal.wall), ceilC = new THREE.Color(pal.ceiling);
     const tmp = new THREE.Color(), base = new THREE.Color();
     const a = new THREE.Vector3(), b = new THREE.Vector3(), e = new THREE.Vector3(), nrm = new THREE.Vector3();
     const v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
@@ -218,6 +291,10 @@ export class Dungeon {
 
   update(dt) {
     this.time = (this.time ?? 0) + dt;
+    if (this.runeMat && !this.wordLearned) {
+      const k = 0.75 + Math.sin(this.time * 2.2) * 0.25;
+      this.runeMat.color.setRGB(0.62 * k, 0.85 * k, 1.0 * k);
+    }
     for (const f of this.flames) {
       const t = this.time * 9 + f.phase;
       const s = 1 + Math.sin(t) * 0.12 + Math.sin(t * 2.3) * 0.08;
@@ -228,23 +305,35 @@ export class Dungeon {
   }
 }
 
-// Rock arch with a dark mouth, sitting on the valley terrain facing the valley centre.
-export function buildCaveEntrance(terrain) {
+// Dungeon entrance on the valley terrain, facing the valley centre.
+// style 'cave': rock arch with a dark mouth. style 'ruin': standing stones and a lintel over steps.
+export function buildEntrance(terrain, { distance, angle0, style }) {
   const [sx, sz] = CONFIG.player.spawn;
   let pos = null;
   for (let i = 0; i < 30 && !pos; i++) {
-    const a = 2.2 + i * 2.39996;
-    const x = sx + Math.cos(a) * D.entranceDistance, z = sz + Math.sin(a) * D.entranceDistance;
+    const a = angle0 + i * 2.39996;
+    const x = sx + Math.cos(a) * distance, z = sz + Math.sin(a) * distance;
     if (terrain.slopeAt(x, z) > 0.85 && terrain.heightAt(x, z) < CONFIG.props.treeMaxHeight) pos = new THREE.Vector3(x, 0, z);
   }
-  pos ??= new THREE.Vector3(sx, 0, sz - D.entranceDistance);
+  pos ??= new THREE.Vector3(sx, 0, sz - distance);
   pos.y = terrain.heightAt(pos.x, pos.z);
 
   const facing = Math.atan2(sx - pos.x, sz - pos.z);   // opening looks toward the spawn
   const group = new THREE.Group();
   group.position.copy(pos);
   group.rotation.y = facing;
+  const local = style === 'ruin' ? buildRuin(group) : buildCave(group);
 
+  const c = Math.cos(facing), sn = Math.sin(facing);
+  const colliders = local.map(([x, z, r]) => ({ x: pos.x + x * c + z * sn, z: pos.z - x * sn + z * c, r }));
+  const front = new THREE.Vector3(pos.x + sn * 1.2, 0, pos.z + c * 1.2);
+  front.y = terrain.heightAt(front.x, front.z);
+  const outside = new THREE.Vector3(pos.x + sn * 4, 0, pos.z + c * 4);
+  return { group, pos, front, outside, facing, colliders };
+}
+
+// Returns local-space colliders [x, z, r].
+function buildCave(group) {
   const rockMat = new THREE.MeshLambertMaterial({ color: 0x74777d, flatShading: true });
   const snowMat = new THREE.MeshLambertMaterial({ color: 0xeef2f6, flatShading: true });
   const rock = (x, y, z, sx_, sy, sz_, mat = rockMat) => {
@@ -264,16 +353,26 @@ export function buildCaveEntrance(terrain) {
   const mouth = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), new THREE.MeshBasicMaterial({ color: 0x050403 }));
   mouth.position.set(0, 1.7, -0.9);
   group.add(mouth);
+  return [[-2.6, -0.5, 1.7], [2.6, -0.5, 1.7], [-4.3, -1.5, 1.3], [4.2, -1.6, 1.3], [0, -2.4, 2.0], [-1.6, -2.4, 1.6], [1.6, -2.4, 1.6]];
+}
 
-  // Colliders (world space) for the pillars and back
-  const colliders = [[-2.6, -0.5, 1.7], [2.6, -0.5, 1.7], [-4.3, -1.5, 1.3], [4.2, -1.6, 1.3], [0, -2.4, 2.0], [-1.6, -2.4, 1.6], [1.6, -2.4, 1.6]]
-    .map(([x, z, r]) => {
-      const c = Math.cos(facing), s = Math.sin(facing);
-      return { x: pos.x + x * c + z * s, z: pos.z - x * s + z * c, r };
-    });
-
-  const front = new THREE.Vector3(pos.x + Math.sin(facing) * 1.2, 0, pos.z + Math.cos(facing) * 1.2);
-  front.y = terrain.heightAt(front.x, front.z);
-  const outside = new THREE.Vector3(pos.x + Math.sin(facing) * 4, 0, pos.z + Math.cos(facing) * 4);
-  return { group, pos, front, outside, facing, colliders };
+function buildRuin(group) {
+  const stone = new THREE.MeshLambertMaterial({ color: 0x8a8d90, flatShading: true });
+  const dark = new THREE.MeshLambertMaterial({ color: 0x5e6164, flatShading: true });
+  const snow = new THREE.MeshLambertMaterial({ color: 0xeef2f6, flatShading: true });
+  const add = (geo, mat, x, y, z, ry = 0, rz = 0) => {
+    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(0, ry, rz); group.add(m);
+  };
+  add(new THREE.BoxGeometry(1.1, 5, 1.1), stone, -2.1, 2.5, 0);            // door pillars
+  add(new THREE.BoxGeometry(1.1, 5, 1.1), stone, 2.1, 2.5, 0);
+  add(new THREE.BoxGeometry(6, 1, 1.5), stone, 0, 5.4, 0);                 // lintel
+  add(new THREE.BoxGeometry(5.6, 0.3, 1.3), snow, 0, 6.05, 0);
+  add(new THREE.BoxGeometry(3.2, 4.3, 0.3), new THREE.MeshBasicMaterial({ color: 0x050505 }), 0, 2.4, -0.4); // doorway
+  add(new THREE.BoxGeometry(6, 5.5, 2.4), dark, 0, 2.6, -1.8);             // mound behind
+  for (let k = 0; k < 3; k++) add(new THREE.BoxGeometry(3.4, 0.25, 0.6), stone, 0, 0.12 - k * 0.0, 0.8 + k * 0.6 - 0.2); // steps
+  // Standing stones on either side, one fallen
+  add(new THREE.BoxGeometry(0.9, 3.6, 0.7), stone, -5.2, 1.6, 1.5, 0.3, 0.08);
+  add(new THREE.BoxGeometry(0.9, 3.0, 0.7), stone, 5.4, 1.3, 1.2, -0.25, -0.1);
+  add(new THREE.BoxGeometry(0.9, 0.8, 3.2), stone, 6.6, 0.4, 3.6, 0.6);
+  return [[-2.1, 0, 0.9], [2.1, 0, 0.9], [0, -1.8, 2.6], [-2.4, -1.8, 2.2], [2.4, -1.8, 2.2], [-5.2, 1.5, 0.7], [5.4, 1.2, 0.7], [6.6, 3.6, 1.0]];
 }

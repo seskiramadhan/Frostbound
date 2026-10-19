@@ -1,9 +1,11 @@
-// Wolves hunt in packs: wander -> chase -> windup -> bite -> recover, and give up
-// (return home) when dragged too far. Valley wolves respawn after a while; dungeon
-// wolves (and the alpha) stay dead.
+// Ground creatures (wolves, draugr) share one AI: wander -> chase -> windup -> strike ->
+// recover, and give up (return home) when dragged too far. The look and animation come
+// from a model module picked by cfg.body. Valley wolves respawn; dungeon creatures stay dead.
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import { box, blobShadow, Flash, lerpAngle, clamp01 } from './model.js';
+import { Flash, lerpAngle } from './model.js';
+import * as wolfModel from './wolfModel.js';
+import * as draugrModel from './draugrModel.js';
 import { moveBody, pushOutOfColliders, settleOnGround, turnToward } from '../systems/physics.js';
 import { mulberry32 } from '../world/noise.js';
 
@@ -11,40 +13,9 @@ const W = CONFIG.wolf, CB = CONFIG.combat;
 const rand = mulberry32(9001);
 const range = ([a, b]) => a + rand() * (b - a);
 
-function buildModel(cfg) {
-  const root = new THREE.Group();
-  const body = new THREE.Group();
-  body.scale.setScalar(cfg.scale);
-  root.add(body);
-  const fur = cfg.fur, light = 0xb9bec4, dark = 0x55595f;
+const MODELS = { wolf: wolfModel, draugr: draugrModel };
 
-  body.add(box(0.42, 0.42, 1.05, fur, 0, 0.78, -0.05));       // torso
-  body.add(box(0.52, 0.52, 0.42, light, 0, 0.84, 0.32));      // ruff
-  const tail = box(0.12, 0.12, 0.55, fur, 0, 0.86, -0.75);
-  tail.rotation.x = 0.5;
-  body.add(tail);
-
-  const head = new THREE.Group(); head.position.set(0, 0.98, 0.55);
-  head.add(box(0.34, 0.32, 0.36, fur, 0, 0, 0.12));
-  head.add(box(0.2, 0.15, 0.28, dark, 0, -0.06, 0.4));         // snout
-  for (const s of [-1, 1]) {
-    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 4), new THREE.MeshLambertMaterial({ color: dark, flatShading: true }));
-    ear.position.set(s * 0.1, 0.22, 0.04);
-    head.add(ear);
-  }
-  body.add(head);
-
-  const legs = [[-0.14, 0.32], [0.14, 0.32], [-0.14, -0.4], [0.14, -0.4]].map(([x, z]) => {
-    const pivot = new THREE.Group(); pivot.position.set(x, 0.62, z);
-    pivot.add(box(0.12, 0.62, 0.13, dark, 0, -0.31, 0));
-    body.add(pivot);
-    return pivot;
-  });
-
-  return { root, body, head, legs, shadow: blobShadow(0.6 * cfg.scale) };
-}
-
-export class Wolf {
+export class Creature {
   // opts: { cfg (overrides on CONFIG.wolf), key (stable save id), respawns, spread }
   constructor(scene, level, events, entities, home, pack, opts = {}) {
     this.cfg = { ...W, ...opts.cfg };
@@ -57,7 +28,7 @@ export class Wolf {
     this.home = home;
     this.pack = pack;
 
-    this.kind = 'wolf';
+    this.kind = this.cfg.body;     // 'wolf' | 'draugr'
     this.team = 'beast';
     this.name = this.cfg.name;
     this.radius = this.cfg.radius;
@@ -68,7 +39,8 @@ export class Wolf {
     this.vel = new THREE.Vector3();
     this.wanderTo = new THREE.Vector3();
 
-    this.model = buildModel(this.cfg);
+    this.look = MODELS[this.cfg.body];
+    this.model = this.look.build(this.cfg);
     this.flash = new Flash(this.model.root);
     scene.add(this.model.root, this.model.shadow);
     this.respawn();
@@ -86,6 +58,7 @@ export class Wolf {
     this.prevFacing = this.facing;
     this.hp = this.maxHp;
     this.alive = true;
+    this.staggerTime = 0;
     this.target = null;
     this.state = 'wander';
     this.stateTime = 0;
@@ -198,7 +171,7 @@ export class Wolf {
         if (this.stateTime >= this.timer) this.#setState('chase');
         break;
       case 'stagger':
-        if (this.stateTime >= CB.stagger.enemy) this.#setState('chase');
+        if (this.stateTime >= this.staggerTime) this.#setState('chase');
         break;
       case 'return':
         goal = this.home; speed = this.cfg.runSpeed;
@@ -234,10 +207,17 @@ export class Wolf {
     this.flash.trigger();
     if (this.state === 'return') return;
     this.target = attacker;
-    if (this.state !== 'bite') this.#setState('stagger');
-    const dx = this.pos.x - attacker.pos.x, dz = this.pos.z - attacker.pos.z, d = Math.hypot(dx, dz) || 1;
-    this.vel.x = dx / d * CB.stagger.knockback;
-    this.vel.z = dz / d * CB.stagger.knockback;
+    if (this.state !== 'bite') this.knockback(attacker.pos, CB.stagger.knockback, CB.stagger.enemy);
+  }
+
+  // Shoved away from `from` (Unrelenting Force, sword hits) and staggered for `time`.
+  knockback(from, force, time) {
+    if (!this.alive) return;
+    this.#setState('stagger');
+    this.staggerTime = time;
+    const dx = this.pos.x - from.x, dz = this.pos.z - from.z, d = Math.hypot(dx, dz) || 1;
+    this.vel.x = dx / d * force;
+    this.vel.z = dz / d * force;
   }
 
   die() {
@@ -255,38 +235,11 @@ export class Wolf {
   }
 
   render(alpha) {
-    const { root, body, head, legs, shadow } = this.model;
+    const { root, shadow } = this.model;
     if (!root.visible) return;
     const out = root.position.lerpVectors(this.prevPos, this.pos, alpha);
     root.rotation.y = lerpAngle(this.prevFacing, this.facing, alpha);
-
-    const run = Math.min(1, this.speed / this.cfg.walkSpeed * 0.6);
-    const s = Math.sin(this.walkPhase) * run * 0.6;
-    legs[0].rotation.x = s; legs[3].rotation.x = s;
-    legs[1].rotation.x = -s; legs[2].rotation.x = -s;
-    body.rotation.set(0, 0, 0);
-    body.position.y = Math.abs(Math.cos(this.walkPhase)) * 0.04 * run;
-    head.rotation.set(0, 0, 0);
-
-    const t = this.stateTime;
-    switch (this.state) {
-      case 'windup':                       // crouch, head low: the tell
-        body.position.y = -0.12 * clamp01(t / 0.2);
-        body.rotation.x = 0.08;
-        head.rotation.x = 0.35 * clamp01(t / 0.2);
-        break;
-      case 'bite':
-        head.rotation.x = -0.4;
-        body.rotation.x = -0.15;
-        break;
-      case 'stagger':
-        body.rotation.z = Math.sin(t * 30) * 0.15 * (1 - clamp01(t / CB.stagger.enemy));
-        break;
-      case 'dead':
-        body.rotation.z = Math.PI / 2 * clamp01(t / 0.4);
-        body.position.y = 0.4 * clamp01(t / 0.4) - 0.1;
-        break;
-    }
+    this.look.animate(this.model, this);
     shadow.position.set(out.x, this.level.heightAt(out.x, out.z) + 0.05, out.z);
   }
 }
@@ -304,26 +257,30 @@ export function spawnWolfPack(scene, terrain, events, entities) {
 
   const pack = [];
   for (let i = 0; i < W.packSize; i++) {
-    const w = new Wolf(scene, terrain, events, entities, home, pack);
+    const w = new Creature(scene, terrain, events, entities, home, pack);
     entities.add(w);
     pack.push(w);
   }
   return pack;
 }
 
-// Dungeon wolves: one pack from the map's 'w' cells, plus the alpha on its own.
-export function spawnDungeonWolves(scene, dungeon, events, entities) {
-  const inside = { wanderRadius: 2, leashRadius: 30 };
-  const pack = [], alphaPack = [];
-  dungeon.wolves.forEach((home, i) => {
-    pack.push(entities.add(new Wolf(scene, dungeon, events, entities, home, pack,
-      { cfg: inside, key: `${dungeon.key}.wolf${i}`, respawns: false, spread: 0 })));
-  });
-  let alpha = null;
-  if (dungeon.alpha) {
-    alpha = entities.add(new Wolf(scene, dungeon, events, entities, dungeon.alpha, alphaPack,
-      { cfg: { ...CONFIG.alphaWolf, ...inside }, key: `${dungeon.key}.alpha`, respawns: false, spread: 0 }));
-    alphaPack.push(alpha);
+// A dungeon's creatures from its map: each map letter names a config section
+// (see Dungeon.spawns). Creatures sharing a letter form one pack. Returns all of them
+// plus the boss (the one whose config has boss: true), if any.
+export function spawnDungeonCreatures(scene, dungeon, events, entities) {
+  const all = [];
+  let boss = null;
+  for (const [cfgKey, homes] of Object.entries(dungeon.spawns)) {
+    const pack = [];
+    const base = cfgKey === 'wolf' ? {} : CONFIG[cfgKey];
+    homes.forEach((home, i) => {
+      const c = entities.add(new Creature(scene, dungeon, events, entities, home, pack,
+        { cfg: { ...base, ...CONFIG.dungeon.inside }, key: base.boss ? `${dungeon.key}.${base.saveKey}` : `${dungeon.key}.${cfgKey}${i}`,
+          respawns: false, spread: 0 }));
+      pack.push(c);
+      all.push(c);
+      if (base.boss) boss = c;
+    });
   }
-  return { wolves: [...pack, ...alphaPack], alpha };
+  return { creatures: all, boss };
 }
