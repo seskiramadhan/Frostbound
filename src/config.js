@@ -114,13 +114,6 @@ export const CONFIG = {
       moveMul: 0.4,
       faceRange: 6,        // while blocking, turn toward the nearest enemy this close
     },
-    dodge: {
-      duration: 0.32,
-      iframes: 0.26,       // invulnerable for this long from the start
-      speed: 12,
-      staminaCost: 22,
-      buffer: 0.2,
-    },
     jump: {
       velocity: 6.2,
       gravity: 20,
@@ -181,10 +174,8 @@ export const CONFIG = {
     joystickRadius: 55,    // px
     joystickDeadzone: 0.12,
     runThreshold: 0.85,    // joystick push beyond this = run
-    // Right-side touch gestures: tap = attack, hold = block, swipe = dodge, drag = camera
+    // Right-side touch gestures: tap = attack, hold = block, drag = camera
     tapSlop: 14,           // px a tap/hold may wander
     holdTime: 0.3,         // seconds still before it counts as block
-    swipeMinDist: 70,      // px
-    swipeMaxTime: 0.2,     // seconds
   },
 };
