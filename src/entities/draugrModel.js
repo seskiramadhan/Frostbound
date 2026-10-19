@@ -1,4 +1,5 @@
 // Draugr: withered undead Nord in rags with a notched ancient sword and glowing eyes.
+// Colours/posture come from cfg (rag, metal, eye, hunch), so the same body also makes village guards.
 import * as THREE from 'three';
 import { box, blobShadow, clamp01, lerp } from './model.js';
 
@@ -7,7 +8,7 @@ export function build(cfg) {
   const body = new THREE.Group();
   body.scale.setScalar(cfg.scale);
   root.add(body);
-  const skin = cfg.fur, rag = 0x3d3a33, metal = 0x5d5a52;
+  const skin = cfg.fur, rag = cfg.rag ?? 0x3d3a33, metal = cfg.metal ?? 0x5d5a52;
 
   const legs = [-0.13, 0.13].map(x => {
     const pivot = new THREE.Group(); pivot.position.set(x, 0.85, 0);
@@ -18,7 +19,7 @@ export function build(cfg) {
   });
   const torso = new THREE.Group();          // leans forward: hunched
   torso.position.set(0, 0.9, 0);
-  torso.rotation.x = 0.18;
+  torso.rotation.x = cfg.hunch ?? 0.18;
   body.add(torso);
   torso.add(box(0.46, 0.62, 0.26, rag, 0, 0.3, 0));           // ragged tunic
   torso.add(box(0.5, 0.12, 0.3, metal, 0, 0.02, 0));          // belt
@@ -26,7 +27,7 @@ export function build(cfg) {
   const head = new THREE.Group(); head.position.set(0, 0.86, 0.04);
   head.add(box(0.26, 0.28, 0.26, skin, 0, 0, 0));
   head.add(box(0.3, 0.12, 0.3, metal, 0, 0.15, 0));           // helm
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x8fe0ff });
+  const eyeMat = new THREE.MeshBasicMaterial({ color: cfg.eye ?? 0x8fe0ff });
   for (const s of [-1, 1]) {
     const eye = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.02), eyeMat);
     eye.position.set(s * 0.06, 0.02, 0.135);
@@ -57,7 +58,7 @@ export function animate({ body, torso, legs, arms }, c) {
   arms[1].rotation.set(s * 0.6 - 0.2, 0, 0);
   body.rotation.set(0, 0, 0);
   body.position.y = 0;
-  torso.rotation.set(0.18, 0, Math.sin(c.walkPhase * 0.4) * 0.05 * walk);
+  torso.rotation.set(c.cfg.hunch ?? 0.18, 0, Math.sin(c.walkPhase * 0.4) * 0.05 * walk);
 
   const t = c.stateTime;
   switch (c.state) {

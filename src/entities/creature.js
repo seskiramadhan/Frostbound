@@ -2,6 +2,8 @@
 // recover, and give up (return home) when dragged too far. The look and animation come
 // from a model module picked by cfg.body. Valley wolves respawn; dungeon creatures stay dead.
 // A crouching player is noticed gradually (`notice` 0..1) instead of on sight.
+// cfg.team / cfg.hunts turn the same AI into village guards (team 'player', hunting 'beast').
+// Raiders (cfg.raider) march on their home (the village) and also attack barricades.
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { Flash, lerpAngle } from './model.js';
@@ -30,7 +32,8 @@ export class Creature {
     this.pack = pack;
 
     this.kind = this.cfg.body;     // 'wolf' | 'draugr'
-    this.team = 'beast';
+    this.team = this.cfg.team ?? 'beast';
+    this.hunts = this.cfg.hunts ?? 'player';
     this.name = this.cfg.name;
     this.radius = this.cfg.radius;
     this.maxHp = this.cfg.maxHealth;
@@ -86,7 +89,9 @@ export class Creature {
     const r = this.target ? this.cfg.loseRadius : this.cfg.detectRadius;
     let best = null, bestD = r * r, sneaker = null, sneakD = Infinity;
     for (const e of this.entities) {
-      if (e.team !== 'player' || !e.alive || e.level !== this.level) continue;
+      if (e.team !== this.hunts || !e.alive || e.level !== this.level) continue;
+      if (e.kind === 'barricade' && !this.cfg.raider) continue;
+      if (Math.abs(e.pos.y - this.pos.y) > 2.5) continue;      // out of reach (watchtower)
       const d = this.pos.distanceToSquared(e.pos);
       if (this.target === e) { if (d < bestD) { bestD = d; best = e; } continue; }
       if (d >= bestD || !this.level.lineOfSight(this.pos, e.pos)) continue;
@@ -152,6 +157,7 @@ export class Creature {
     switch (this.state) {
       case 'wander':
         if (tgt) { this.#setState('chase'); break; }
+        if (this.cfg.raider && homeD > 6) { goal = this.home; speed = this.cfg.marchSpeed; break; }   // march on the village
         this.hp = Math.min(this.maxHp, this.hp + this.cfg.healRate * dt);
         if (this.pos.distanceTo(this.wanderTo) > 0.8) { goal = this.wanderTo; speed = this.cfg.walkSpeed; }
         else if ((this.timer -= dt) <= 0) {

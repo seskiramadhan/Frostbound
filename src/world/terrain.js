@@ -22,6 +22,7 @@ export class Terrain {
         this.heights[j * n + i] = this.#shape(-this.half + i * this.cell, -this.half + j * this.cell);
       }
     }
+    this.platforms = [];
     this.mesh = this.#buildMesh();
     this.name = 'valley';
     this.colliders = [];   // trees, rocks, cave mouth (filled in by props)
@@ -65,8 +66,16 @@ export class Terrain {
     return this.heights[j * n + i];
   }
 
-  // Height on the rendered surface. Cell split along (i, j+1)-(i+1, j).
+  // Height you stand on: the ground, or the top of a platform (watchtower) when over one.
+  // platforms: [{ x, z, hw, hd, y }] (y = absolute top height).
   heightAt(x, z) {
+    const g = this.groundAt(x, z);
+    for (const p of this.platforms) if (Math.abs(x - p.x) < p.hw && Math.abs(z - p.z) < p.hd && p.y > g) return p.y;
+    return g;
+  }
+
+  // Height on the rendered surface. Cell split along (i, j+1)-(i+1, j).
+  groundAt(x, z) {
     const gx = (x + this.half) / this.cell, gz = (z + this.half) / this.cell;
     const i = Math.min(this.seg - 1, Math.max(0, Math.floor(gx)));
     const j = Math.min(this.seg - 1, Math.max(0, Math.floor(gz)));

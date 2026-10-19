@@ -27,6 +27,9 @@ import { Shouts } from './systems/shouts.js';
 import { Projectiles } from './systems/projectiles.js';
 import { Magic } from './systems/magic.js';
 import { Stealth, witness } from './systems/stealth.js';
+import { Raid } from './systems/raid.js';
+import { Jobs } from './systems/jobs.js';
+import { buildBell, buildTower } from './world/defenses.js';
 import { Quests } from './systems/quests.js';
 import { loadSave, writeSave, clearSave } from './systems/save.js';
 import { ThirdPersonCamera } from './camera.js';
@@ -94,6 +97,10 @@ const dragon = entities.add(new Dragon(scene, valley, events, fx, entities));   
 const huntDragon = entities.add(new Dragon(scene, valley, events, fx, entities));      // dragon hunts / attacks
 const WE = CONFIG.worldEater;
 const worldEater = entities.add(new Dragon(scene, summit, events, fx, entities, { scale: WE.scale, colors: WE.colors }));
+const raid = new Raid(scene, valley, events, entities);     // raiders, guards, barricades (after the dragons: fixed ids)
+const bell = buildBell(scene, valley);
+const tower = buildTower(scene, valley);
+const RD = CONFIG.raid;
 const chests = Object.values(dungeons).flatMap(d => d.chests.map(c => new Chest(scene, d, c.pos, c.lootKey, Math.PI)));
 const projectiles = new Projectiles(scene, entities, combat);
 const magic = new Magic(scene, entities, combat, fx);
@@ -116,17 +123,30 @@ const stealth = new Stealth(player, creatures, skills, () => session.role === 'g
 const visited = {};
 const flags = {};        // story switches set in conversations (metJarl, reportedDen, ...)
 const world = {
-  valley, den, barrow, summit, entrances, inventory, visited, flags, shouts, dragon, worldEater,
+  valley, den, barrow, summit, entrances, inventory, visited, flags, shouts, dragon, worldEater, huntDragon, raid,
+  bellPos: bell.pos,
+  creaturesIn: level => creatures.filter(c => c.level === level),
+  valleyWolves: () => creatures.filter(c => c.level === valley && c.kind === 'wolf'),
   alpha: bosses.den, wight: bosses.barrow, summitCentre: new THREE.Vector3(summit.ox, 0, summit.oz),
   chest: key => chests.find(c => c.key === key),
   npc: id => npcs.find(n => n.id === id).pos,
 };
 const quests = new Quests(events, world);
+world.quests = quests;
+const jobs = new Jobs(world, {
+  begin: type => {
+    if (type === 'den' || type === 'barrow') refillDungeon(dungeons[type], true);
+    else if (type === 'dragon') startHunt(true);
+    else if (type === 'raid') startRaid();
+  },
+  failed: () => hud.toast('The Jarl\'s request failed. Ask him for new work.'),
+});
+world.jobs = jobs;
 
 const hud = new Hud();
 const session = new Session({
   events, scene, player, inventory, entities, combat, shouts, levels, dragon,
-  enemies: [...creatures, dragon, huntDragon, worldEater], onHurt: guestHurt,
+  enemies: [...creatures, dragon, huntDragon, worldEater, ...raid.units], onHurt: guestHurt,
 });
 const coopPanel = new CoopPanel(session, {
   blocker: () => huntBlocker(), start: () => startHunt(), level: () => huntsWon + 1, active: () => huntDragon.active,
@@ -235,7 +255,15 @@ const interactables = [
   ...chests.map(c => ({ level: c.level, pos: c.pos, label: 'Open chest', enabled: () => !c.opened, use: () => openChest(c) })),
   ...strongboxes.map(b => ({ level: valley, pos: b.pos, label: `Steal from ${npcs.find(n => n.id === b.owner).name}'s strongbox`,
     enabled: () => !b.opened, use: () => steal(b) })),
-  ...npcs.map(n => ({ level: valley, pos: n.pos, label: `Talk to ${n.name}`, use: () => openDialog(n) })),
+  ...npcs.map(n => ({ level: valley, pos: n.pos, label: `Talk to ${n.name}`, enabled: () => !raid.active, use: () => openDialog(n) })),
+  // Raids: the alarm bell, the watchtower, repairing barricades mid-raid
+  { level: valley, pos: bell.pos, label: 'Ring the bell (start a raid)', enabled: () => !raidBlocker(), use: () => startRaid() },
+  { level: valley, pos: tower.base, label: 'Climb the watchtower', enabled: () => player.pos.y < tower.height - 1,
+    use: () => player.moveTo(valley, tower.top, player.facing) },
+  { level: valley, pos: tower.top, label: 'Climb down', enabled: () => player.pos.y > tower.height - 1,
+    use: () => player.moveTo(valley, tower.base, player.facing) },
+  ...raid.barricades.map(b => ({ level: valley, pos: b.pos, label: `Repair barricade (${RD.repairCost} gold)`,
+    enabled: () => raid.active && session.role !== 'guest' && b.hp < b.maxHp, use: () => repairBarricade(b) })),
 ];
 
 function nearestInteractable() {
@@ -287,9 +315,9 @@ events.on('castBolt', ({ caster, damage }) => {
 
 // ---- Feedback ----
 const SHAKE = CONFIG.combat.shake;
-events.on('damage', ({ target }) => {
+events.on('damage', ({ target, attacker }) => {
   if (target === player) { hud.hurt(); tpCam.shake(SHAKE.hit); }
-  else if (target !== dragon) hud.showTarget(target);
+  else if (attacker === player && target !== dragon) hud.showTarget(target);
 });
 events.on('blocked', ({ target }) => { if (target === player) tpCam.shake(SHAKE.block); });
 events.on('death', ({ target, killer }) => {
@@ -298,6 +326,7 @@ events.on('death', ({ target, killer }) => {
   if (target.kind === 'wolf' && target.level === player.level && (killer === player || session.active)) {
     inventory.add(target === world.alpha ? CONFIG.loot.alphaDrop : CONFIG.loot.wolfDrop);
   }
+  if (target.kind === 'wolf' && target.level === valley && !target.cfg.raider && killer === player) jobs.onWolfKilled();
 });
 events.on('inventory', () => applyStats(player, inventory, skills));
 events.on('itemAdded', ({ id, count }) => hud.toast(`${ITEMS[id].name}${count > 1 ? ` (${count})` : ''} added`));
@@ -378,7 +407,7 @@ events.on('shoutLearned', () => audio.play('word'));
 events.on('death', ({ target }) => { if (target === player) audio.play('death'); });
 events.on('dragonDowned', () => hud.toast('The dragon crashes to the ground!'));
 events.on('dragonDead', ({ dragon: d }) => {
-  if (d === huntDragon) { huntWon(); return; }
+  if (d === huntDragon) { huntWon(); jobs.onDragonSlain(); return; }
   if (d === worldEater) { victory(); return; }
   dragon.char();
   shouts.learn('fireBreath', true);
@@ -448,6 +477,78 @@ function victory() {
   }, 1.2), 4500);
 }
 
+// ---- Raids on Frosthollow ----
+let raidsWon = 0, shopClosedUntil = 0;
+const anyPlayerUp = () => player.alive || [...session.players.values()].some(p => p.body?.alive && p.body.level === valley);
+
+// Why a raid can't start now (null = it can). Host / solo only.
+function raidBlocker() {
+  if (session.role === 'guest') return 'Only the host can start a raid';
+  if (raid.active) return 'A raid is already on';
+  if (!quests.isDone('howlingDen')) return 'Finish the Jarl\'s first task first';
+  if (player.level !== valley || !player.alive) return 'Be in the valley';
+  if (dragon.alive || huntDragon.alive) return 'Not while a dragon is up';
+  return null;
+}
+
+function startRaid() {
+  const why = raidBlocker();
+  if (why) { hud.toast(why); return; }
+  const level = raidsWon + 1;
+  raid.start(level, { hp: (1 + RD.hpPerLevel * (level - 1)) * ngHp(), dmg: (1 + RD.dmgPerLevel * (level - 1)) * ngDmg() });
+  bellTime = 0;
+}
+
+function repairBarricade(b) {
+  if (!inventory.spend(RD.repairCost)) { hud.toast(`You need ${RD.repairCost} gold to repair it`); return; }
+  b.repair();
+  audio.play('chest', b.pos);
+  hud.toast('Barricade repaired');
+}
+
+let bellTime = 99;
+const RAID_WAVES = RD.waves.length;
+events.on('raid', ({ data }) => {
+  if (session.role === 'guest') raid.follow(data);
+  const lv = data.level ?? 1;
+  if (data.phase === 'warning') {
+    bellTime = 0;
+    hud.announce('Raiders approach Frosthollow!', `Raid level ${lv}. Defend the barricades! Wave 1 in ${RD.warning} seconds.`);
+    audio.play('roar');
+  } else if (data.phase === 'wave') {
+    hud.announce(`Wave ${data.wave + 1} of ${RAID_WAVES}`, data.wave === RAID_WAVES - 1 ? 'The Draugr Warlord leads them!' : `${data.count} raiders incoming`);
+    tpCam.shake(0.3);
+  } else if (data.phase === 'cleared') {
+    hud.announce(`Wave ${data.wave + 1} beaten`, `Next wave in ${RD.wavePause} seconds. Repair the barricades!`);
+  } else if (data.phase === 'won') {
+    if (player.level === valley) {
+      const gold = RD.reward.gold + RD.reward.goldPerLevel * (lv - 1);
+      hud.announce('Frosthollow stands!', `The raiders are beaten. Reward: ${gold} gold`);
+      inventory.addGold(gold);
+      if (!flags.raidWon) { flags.raidWon = true; inventory.add(RD.reward.firstWinItem); }
+    }
+    raidsWon++;
+    audio.play('quest');
+    jobs.onRaid(true);
+    save();
+  } else if (data.phase === 'lost') {
+    shopClosedUntil = Date.now() + RD.shopClosed * 1000;
+    hud.announce('Frosthollow has been plundered', 'Ingrid\'s shop burned. The village will rebuild. Ring the bell to try again.');
+    jobs.onRaid(false);
+    save();
+  }
+});
+
+// HUD objective during a raid: wave, raiders left, barricades standing; marker on the nearest raider.
+function raidObjective() {
+  const left = raid.raidersLeft(), up = raid.barricadesUp, n = raid.barricades.length;
+  const text = raid.phase === 'warning' ? `Get ready! Barricades ${up}/${n}`
+    : raid.phase === 'pause' ? `Wave ${raid.wave + 1} beaten. Next wave soon · barricades ${up}/${n}`
+      : `Wave ${raid.wave + 1}/${RAID_WAVES}: ${left} raider${left === 1 ? '' : 's'} left · barricades ${up}/${n}`;
+  const near = raid.nearestRaider(player.pos);
+  return { name: 'Raid on Frosthollow', text, target: { level: valley, pos: near ? near.pos : bell.pos } };
+}
+
 // ---- Post-game & New Game+ ----
 const PG = CONFIG.postGame;
 let ng = 0;                    // New Game+ level (enemies tougher)
@@ -471,11 +572,17 @@ function maybeRefillDungeon(d) {
   if (!flags.victory || session.role === 'guest') return;
   const mine = creatures.filter(c => c.level === d);
   if (mine.some(c => c.alive) || Date.now() - (refills[d.key] ?? 0) < PG.dungeonRespawn * 1000) return;
+  refillDungeon(d);
+}
+
+// Refill a dungeon one tier tougher, with closed chests (post-game, or a Jarl's request).
+function refillDungeon(d, quiet = false) {
+  const mine = creatures.filter(c => c.level === d);
   tiers[d.key] = (tiers[d.key] ?? 0) + 1;
   refills[d.key] = Date.now();
   for (const c of mine) { scaleCreature(c); c.respawns = false; c.respawn(); }
   for (const ch of chests) if (ch.level === d) { ch.opened = false; ch.openT = 0; ch.tier = tiers[d.key]; }
-  hud.toast(`${d.name} has new occupants... and new treasure`);
+  if (!quiet) hud.toast(`${d.name} has new occupants... and new treasure`);
 }
 
 function newGamePlus() {
@@ -516,6 +623,9 @@ function save() {
   writeSave({
     ng,
     hunts: huntsWon,
+    raids: raidsWon,
+    shopClosedUntil,
+    jobs: jobs.toJSON(),
     flags,
     player: { level: player.level.key ?? 'valley', pos: player.pos.toArray(), facing: player.facing, hp: player.hp,
       bowMode: player.bowMode, spellMode: player.spellMode },
@@ -534,12 +644,15 @@ function applySave(s) {
   skills.load(s.skills);
   shouts.load(s.shouts);
   huntsWon = Math.max(0, s.hunts | 0);
+  raidsWon = Math.max(0, s.raids | 0);
+  shopClosedUntil = +s.shopClosedUntil || 0;
   ng = Math.max(0, s.ng | 0);
   Object.assign(tiers, s.world?.tiers);
   Object.assign(refills, s.world?.refills);
   for (const [key, t] of Object.entries(s.world?.chestTiers ?? {})) { const c = world.chest(key); if (c) c.tier = t; }
   for (const c of creatures) scaleCreature(c);   // NG+ and refill tiers
   quests.load(s.quests);
+  jobs.load(s.jobs);
   Object.assign(visited, s.world?.visited);
   Object.assign(flags, s.flags);
   for (const key of s.world?.chests ?? []) world.chest(key)?.open(true);
@@ -608,8 +721,10 @@ $('newgame').addEventListener('click', e => {
 // ---- Villagers: talk, trade, rest ----
 const VIL = CONFIG.village;
 const talkCtx = {
-  quests, inventory, flags, player, newGamePlus,
+  quests, inventory, flags, player, newGamePlus, jobs,
   get ng() { return ng; },
+  get isGuest() { return session.role === 'guest'; },
+  get shopClosed() { return Date.now() < shopClosedUntil; },
   done: line => dialog.say(line),
   trade: () => { tradeMode = true; },
   rest: () => {
@@ -653,6 +768,7 @@ function openDialog(npc) {
   if (dialog.open || menu.open) return;
   tradeMode = false;
   talkCtx.confirmNg = false;
+  talkCtx.jobOffer = null;
   dialog.show(npc, () => (tradeMode ? tradeView() : talk(npc.id, talkCtx)));
   if (!IS_TOUCH) document.exitPointerLock?.();
 }
@@ -740,6 +856,8 @@ function tick(dt, controls) {
     dragon.tick(edt);
     huntDragon.tick(edt);
     worldEater.tick(edt);
+    raid.tick(edt);
+    raid.update(dt, anyPlayerUp());
   }
   projectiles.update(dt);
   magic.update(dt, [player]);
@@ -793,7 +911,7 @@ function updateSound(dt) {
   for (const d of [dragon, huntDragon, worldEater]) {
     if (d.breathing > 0 && d.alive && fireTimer <= 0 && player.level === d.level) { audio.play('fire', d.pos); fireTimer = 0.28; }
   }
-  const boss = (player.level === valley && (dragon.alive || huntDragon.alive)) || (player.level === summit && worldEater.alive);
+  const boss = (player.level === valley && (dragon.alive || huntDragon.alive || raid.active)) || (player.level === summit && worldEater.alive);
   audio.setMood(boss ? 'boss' : 'explore');
 }
 
@@ -833,12 +951,18 @@ function frame(now) {
   huntDragon.render(alpha);
   worldEater.render(alpha);
   for (const c of chests) c.update(dt);
+  raid.render(alpha, dt);
+  bell.swing(bellTime += dt);
+  if (playing && player.level === valley && Date.now() < shopClosedUntil && Math.random() < 0.25) fx.burn({ x: 14 + (Math.random() - 0.5) * 6, y: 3.2, z: -4 }, 1.5, 2);
   for (const b of strongboxes) b.update(dt);
   for (const p of session.players.values()) {   // co-op players holding Flames
     const r = p.remote, root = r.model.root;
     if (playing && root.visible && r.pose?.state === 'flames' && Math.random() < 0.5) magic.flameFx(root.position, root.rotation.y);
   }
-  for (const n of npcs) n.update(dt, player, dialog.npc === n);
+  for (const n of npcs) {                          // villagers hide in the longhouse during a raid
+    n.update(dt, player, dialog.npc === n);
+    n.model.root.visible = n.model.shadow.visible = !raid.active;
+  }
   for (const d of Object.values(dungeons)) d.update(dt);
   if (playing) fx.update(dt * (shouts.timeScale < 1 ? 0.6 : 1));
   session.render(dt, player.level.key ?? 'valley', levels);
@@ -853,6 +977,7 @@ function frame(now) {
   let mark = null;
   const inDungeon = player.level !== valley;
   if (huntDragon.alive && player.level === valley) obj = { name: 'Dragon hunt', text: `Slay the ${huntDragon.name}`, target: { level: valley, pos: huntDragon.pos } };
+  if (raid.active) obj = raidObjective();
   if (obj?.target) {
     if (obj.target.level === player.level) mark = obj.target.pos;
     else mark = inDungeon ? player.level.exit : entrances[obj.target.level.key].front;
@@ -870,7 +995,7 @@ function frame(now) {
   if (session.role === 'guest') {
     for (const d of [dragon, huntDragon, worldEater]) if (d.state === 'soul' && Math.random() < 0.5) fx.soul({ x: d.pos.x, y: d.pos.y + 2, z: d.pos.z }, player.pos, 2);
   }
-  hud.setBoss(player.level === summit ? (worldEater.alive ? worldEater : null)
+  hud.setBoss(raid.active && player.level === valley ? raid.warlord : player.level === summit ? (worldEater.alive ? worldEater : null)
     : player.level !== valley ? null : dragon.alive ? dragon : huntDragon.alive ? huntDragon : null);
 
   updateSound(dt);
@@ -899,5 +1024,6 @@ window.frostbound = {
   valley, entrances, interactables, projectiles, magic, stealth, strongboxes, fx, save, menu, session, coopPanel,
   tpCam, renderer,
   go: (level, at, facing = 0) => { player.moveTo(level, at, facing); enterLevel(level, facing); },
-  dragonAttack: () => startHunt(true), get ng() { return ng; }, tiers, refills,
+  dragonAttack: () => startHunt(true), get ng() { return ng; }, tiers, refills, raid, jobs, tower, bell, startRaid,
+  get raidsWon() { return raidsWon; }, combat,
 };

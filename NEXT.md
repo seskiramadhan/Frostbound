@@ -1,8 +1,8 @@
 # NEXT.md — where Frostbound stands and what's pending
 
 Read this first in a new session, then `CLAUDE.md` for the rules.
-Last updated: 2026-10-19 (rounds 1–4, music and the update button are all merged and live, build 2).
-**Next: build the "Jarl's requests + raids" round (see the plan below), but only when the user says go.**
+Last updated: 2026-10-19 (round 5 "Jarl's requests + raids" built on branch `raids`, build 3, awaiting test/merge).
+**Next after it's merged and tested: grow the main story (roadmap #3), or fixes from the user's playtest.**
 
 ## Live now (merged to `master`, deployed to GitHub Pages)
 https://seskiramadhan.github.io/Frostbound/
@@ -23,6 +23,7 @@ https://seskiramadhan.github.io/Frostbound/
 | Round 4 | Sneak + stealing, fire magic + Magicka, hold-to-switch shouts, fewer draw calls | #13 |
 | Music | CC0 tracks `audio/music/boss.mp3` + `explore.mp3` (converted from the user's WAVs) | #14 |
 | Update button | Bag ↻ re-downloads every game file past the cache; "New version available" notice; build 2 | #15 |
+| Round 5 | Raids on Frosthollow + the Jarl's requests (build 3) | round-5 PR (branch `raids`) |
 
 **Story today (with round 2):** start in Frosthollow → The Jarl's Summons (talk to Jarl Hrolf) →
 The Howling Den (den, alpha, treasure, report to Jarl) → Dragon Rising (barrow, FUS word wall, dragon,
@@ -61,6 +62,25 @@ higher build than `src/version.js` `BUILD` (checked on load and every 10 min), a
 "Build N" at the bottom. **Bump both numbers in every PR.** Build 2 = this feature.
 Devices still on build 1 or older need one last manual refresh/cache clear to get the button.
 
+**Round 5 (built, awaiting test): raids + the Jarl's requests**
+- **Raids:** ring the **bell** in the square (after The Howling Den, host/solo only, not while a dragon is up)
+  or take the Jarl's "Defend" job. Villagers hide; 2 **guards** (same AI as creatures, `team: 'player'`,
+  `hunts: 'beast'`) defend. After an 8 s warning, 3 waves march in along 3 lanes (east, west, south):
+  4 wolves → 5 draugr → 3 draugr + the **Draugr Warlord** (boss bar). Raiders (`cfg.raider`) march on
+  the village and attack **barricades** (entities, `kind: 'barricade'`, fixed, 160 HP; repair mid-raid
+  for 15 gold; rebuilt free when a raid starts). **Watchtower** north of the south gate: climb with Use,
+  stand on top (valley `platforms`), and creatures can't reach anyone more than 2.5 m above them.
+  Win: 150 + 75/level gold, first win gives the **Warlord's Axe** (27 dmg). Lose (all barricades broken
+  or everyone down): Ingrid's shop burns and stays shut for 5 min. Each raid won makes the next tougher
+  (+25% HP, +15% dmg per level; NG+ on top). A raid in progress isn't saved.
+- **Jarl's requests:** "Any work for me?" (after The Howling Den; not for co-op guests). One random job at
+  a time: clear Frostfang Den or Bleakrock Barrow (refills it), hunt 3 valley wolves, slay a dragon
+  (after Dragon Rising), defend the village (starts a raid). Then "The job is done." to be paid:
+  60 gold + 25 per job done (max 400). Quest `jarlJob` ("Jarl's Request") is restarted for each job;
+  its step text comes from `systems/jobs.js`. Losing a raid job fails it.
+- Co-op: protocol v6 (raid units in the world list, 'raid' world event). Guests follow the host's raid,
+  get the win reward if they're in the valley, can't ring the bell or repair barricades.
+
 ## Roadmap agreed with the user (2026-10-19)
 
 **Strategy:** build the replayable extras now (**Jarl's requests + raids**, one round), and grow the
@@ -70,9 +90,9 @@ Every PR: bump the build number, keep old saves loading, and put a short "What's
 
 | # | Idea | What's in it | Size | Status |
 |---|---|---|---|---|
-| **1** | **Raids on Frosthollow** (original, Minecraft-like) | **Player starts it**: ring the village bell, or take the Jarl's "Defend the village" job. Villagers hide in the longhouse. 3 waves from the forest edge: wolves → draugr → **Draugr Warlord** (boss). Fixed barricades on the village edges, repaired with gold; a watchtower for bow/fire; 2 village guards fight with you; a wave bar on screen. Win = big gold + a rare item. Lose (gentle) = a house burns and Ingrid's shop closes for a while, nothing permanent. Harder each time. Host runs it in co-op. | Medium | **Next round** (with #2) |
-| **2** | **Jarl's requests** (bounty board, Skyrim-style radiant jobs) | Talk to the Jarl → "Any work?" → one random job at a time: clear a dungeon (refills it), hunt the wolf pack, slay a dragon over the valley, defend the village (starts a raid). Gold grows with each finished job. Shown in the quest log like other quests. | Small–medium | **Next round** (with #1) |
-| **3** | **More Skyrim main story** (Greybeards) | A **new main quest** between Dragon Rising and The World-Eater (added as a new quest, not new steps, so saves stay valid): (a) after the first dragon, **"DOVAHKIIN!"** thunders from the mountain; (b) **"The Way of the Voice"**: climb to a High Hrothgar-style monastery halfway up the peak, where old masters test your shouts and teach a word; (c) **"The Horn"**: fetch an ancient horn from a barrow; (d) then the summit path opens. Optional: a **Dragonstone** in Bleakrock Barrow showing dragon burial sites. | Medium | Later, in small updates |
+| **1** | **Raids on Frosthollow** (original, Minecraft-like): ✅ round 5 | **Player starts it**: ring the village bell, or take the Jarl's "Defend the village" job. Villagers hide in the longhouse. 3 waves from the forest edge: wolves → draugr → **Draugr Warlord** (boss). Fixed barricades on the village edges, repaired with gold; a watchtower for bow/fire; 2 village guards fight with you; a wave bar on screen. Win = big gold + a rare item. Lose (gentle) = a house burns and Ingrid's shop closes for a while, nothing permanent. Harder each time. Host runs it in co-op. | Medium | ✅ Built (round 5) |
+| **2** | **Jarl's requests** (bounty board, Skyrim-style radiant jobs): ✅ round 5 | Talk to the Jarl → "Any work?" → one random job at a time: clear a dungeon (refills it), hunt the wolf pack, slay a dragon over the valley, defend the village (starts a raid). Gold grows with each finished job. Shown in the quest log like other quests. | Small–medium | ✅ Built (round 5) |
+| **3** | **More Skyrim main story** (Greybeards) | A **new main quest** between Dragon Rising and The World-Eater (added as a new quest, not new steps, so saves stay valid): (a) after the first dragon, **"DOVAHKIIN!"** thunders from the mountain; (b) **"The Way of the Voice"**: climb to a High Hrothgar-style monastery halfway up the peak, where old masters test your shouts and teach a word; (c) **"The Horn"**: fetch an ancient horn from a barrow; (d) then the summit path opens. Optional: a **Dragonstone** in Bleakrock Barrow showing dragon burial sites. | Medium | **Next**, in small updates |
 
 **Dropped by the user:** bandits (forest camp + hideout) for now; "The Raiders' Nest" fort siege.
 **Maybe later:** blacksmith + dragon bone gear, legendary dragon, buying a house, legendary skills,
@@ -153,4 +173,5 @@ HP +30%/level, damage +15%/level, names from `CONFIG.hunt.names`; everyone prese
 
 ## Open questions for the user
 - Playtest notes from rounds 3–4 (World-Eater difficulty, sneak speed, fire balance, iPad FPS, buttons).
-- Go-ahead to start the "Jarl's requests + raids" round (roadmap #1 + #2).
+- Round 5 feedback: raid difficulty, barricade HP, guard strength, rewards, job variety.
+- Go-ahead for the main story update (roadmap #3: "DOVAHKIIN!", The Way of the Voice, the Horn).
