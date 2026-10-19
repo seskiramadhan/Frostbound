@@ -12,6 +12,7 @@ import { buildVillage } from './world/village.js';
 import { Npc, VILLAGERS } from './entities/npc.js';
 import { talk } from './systems/dialogue.js';
 import { Dialog } from './ui/dialog.js';
+import { GameAudio } from './audio.js';
 import { Player } from './entities/player.js';
 import { spawnWolfPack, spawnDungeonCreatures } from './entities/creature.js';
 import { Dragon } from './entities/dragon.js';
@@ -109,6 +110,10 @@ const coopPanel = new CoopPanel(session, {
 });
 const menu = new Menu(inventory, skills, player, shouts, coopPanel, quests);
 const dialog = new Dialog();
+const audio = new GameAudio();
+const SOUND_LABEL = { all: '♪ On', sfx: '♪ FX only', off: '♪ Off' };
+$('menu-sound').textContent = SOUND_LABEL[audio.pref];
+$('menu-sound').addEventListener('click', () => { $('menu-sound').textContent = SOUND_LABEL[audio.cyclePref()]; });
 const input = new Input(renderer.domElement, $('joy'), $('joy-knob'), {
   jump: $('btn-jump'), interact: $('btn-interact'), menu: $('btn-bag'), shout: $('btn-shout'), bow: $('btn-bow'),
 });
@@ -117,6 +122,7 @@ const input = new Input(renderer.domElement, $('joy'), $('joy-knob'), {
 let busy = false;   // fading between levels
 function travel(level, at, facing) {
   busy = true;
+  audio.play('door');
   hud.fade(() => {
     player.moveTo(level, at, facing);
     enterLevel(level, facing);
@@ -126,6 +132,7 @@ function travel(level, at, facing) {
 }
 
 function enterLevel(level, facing) {
+  audio.setAmbience(level === valley ? 'valley' : 'dungeon');
   tpCam.level = level;
   tpCam.yaw = facing + Math.PI;
   tpCam.snap();
@@ -136,6 +143,7 @@ function enterLevel(level, facing) {
 
 function openChest(chest) {
   chest.open();
+  audio.play('chest');
   const loot = CONFIG.loot[chest.lootKey];
   for (const [id, n] of Object.entries(loot.items)) inventory.add(id, n);
   if (loot.gold) inventory.addGold(loot.gold);
@@ -255,7 +263,28 @@ events.on('netEnded', ({ reason, wasGuest }) => {
     hud.fade(() => location.reload(), 1.2);
   }
 });
-events.on('dragonRoar', () => { hud.announce('A dragon approaches!'); tpCam.shake(0.45); });
+events.on('dragonRoar', () => { hud.announce('A dragon approaches!'); tpCam.shake(0.45); audio.play('roar'); });
+
+// ---- Sound effects from game events ----
+events.on('attack', ({ attacker }) => {
+  if (attacker === player) audio.play('swing');
+  else if (attacker.kind === 'wolf') audio.play('bite', attacker.pos);
+  else if (attacker.kind === 'draugr') audio.play('heavySwing', attacker.pos);
+  else if (attacker.kind === 'dragon') audio.play('bite', attacker.pos);
+});
+events.on('damage', ({ target, source }) => {
+  if (target === player) audio.play('hurt');
+  else audio.play(source === 'arrow' ? 'arrowHit' : 'hit', target.pos);
+});
+events.on('blocked', ({ target }) => audio.play('block', target.pos));
+events.on('shootArrow', () => audio.play('bow'));
+events.on('shout', ({ id }) => audio.play(id));
+events.on('dragonDowned', ({ dragon: d }) => audio.play('thud', d?.pos));
+events.on('skillUp', () => audio.play('levelUp'));
+events.on('questDone', () => audio.play('quest'));
+events.on('questStarted', () => audio.play('questStart'));
+events.on('shoutLearned', () => audio.play('word'));
+events.on('death', ({ target }) => { if (target === player) audio.play('death'); });
 events.on('dragonDowned', () => hud.toast('The dragon crashes to the ground!'));
 events.on('dragonDead', ({ dragon: d }) => {
   if (d === huntDragon) { huntWon(); return; }
@@ -375,6 +404,7 @@ if (joinCode) $('cta').textContent = `${IS_TOUCH ? 'Tap' : 'Click'} to join room
 // ---- Start / pause / menu ----
 let started = false;
 function startGame(lock = true) {
+  audio.start();   // browsers only allow sound after a tap
   if (!started) {
     started = true;
     if (!quests.has('howlingDen')) quests.start('arrival');   // new game: meet the Jarl first
@@ -426,7 +456,7 @@ function tradeView() {
   const opts = [{ label: 'Buy', cls: 'head', run: () => true, disabled: true }];
   for (const [id, price] of VIL.stock) {
     opts.push({ label: ITEMS[id].name, note: `${price} g`, disabled: inventory.gold < price, run: () => {
-      if (inventory.spend(price)) { inventory.add(id, 1, true); hud.toast(`Bought ${ITEMS[id].name}`); save(); }
+      if (inventory.spend(price)) { inventory.add(id, 1, true); hud.toast(`Bought ${ITEMS[id].name}`); audio.play('coin'); save(); }
       return true;
     } });
   }
@@ -439,6 +469,7 @@ function tradeView() {
         inventory.remove(e.id);
         inventory.addGold(price, true);
         hud.toast(`Sold ${e.def.name} for ${price} gold`);
+        audio.play('coin');
         return true;
       } });
     }
@@ -523,6 +554,26 @@ function tick(dt, controls) {
   if ((saveTimer += dt) >= CONFIG.save.autosaveInterval) { saveTimer = 0; save(); }
 }
 
+// ---- Per-frame sound: footsteps, enemy tells, dragon fire, music mood ----
+let lastStep = 0, fireTimer = 0;
+const tellState = new Map();
+function updateSound(dt) {
+  audio.setListener(player.pos);
+  const step = Math.floor(player.walkPhase / Math.PI);
+  if (step !== lastStep) { lastStep = step; if (player.grounded && player.speed > 0.8 && player.alive) audio.play('step'); }
+  for (const c of creatures) {        // growl / groan as they wind up an attack (their tell)
+    const was = tellState.get(c);
+    if (c.state === 'windup' && was !== 'windup' && c.alive && c.level === player.level) audio.play(c.kind === 'draugr' ? 'groan' : 'growl', c.pos);
+    tellState.set(c, c.state);
+  }
+  fireTimer -= dt;
+  for (const d of [dragon, huntDragon]) {
+    if (d.breathing > 0 && d.alive && fireTimer <= 0 && player.level === valley) { audio.play('fire', d.pos); fireTimer = 0.28; }
+  }
+  const boss = player.level === valley && (dragon.alive || huntDragon.alive);
+  audio.setMood(boss ? 'boss' : 'explore');
+}
+
 // ---- Loop ----
 const STEP = 1 / CONFIG.loop.tickRate;
 const renderPos = new THREE.Vector3();
@@ -590,6 +641,7 @@ function frame(now) {
   }
   hud.setBoss(player.level !== valley ? null : dragon.alive ? dragon : huntDragon.alive ? huntDragon : null);
 
+  updateSound(dt);
   hud.frame(dt, player);
   renderer.render(scene, camera);
 }
@@ -603,7 +655,7 @@ addEventListener('resize', () => {
 
 // Debug handle for testing in the console
 window.frostbound = {
-  player, creatures, dragon, huntDragon, entities, npcs, dialog, flags, village, events, inventory, skills, shouts, quests, chests, dungeons, den, barrow,
+  player, creatures, dragon, huntDragon, entities, npcs, dialog, flags, village, audio, events, inventory, skills, shouts, quests, chests, dungeons, den, barrow,
   valley, entrances, interactables, projectiles, fx, save, menu, session, coopPanel,
   tpCam,
   go: (level, at, facing = 0) => { player.moveTo(level, at, facing); enterLevel(level, facing); },

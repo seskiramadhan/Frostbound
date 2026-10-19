@@ -386,6 +386,15 @@ export const CONFIG = {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
   },
 
+  audio: {
+    master: 0.9,
+    music: 0.45,
+    sfx: 0.8,
+    wind: 0.05,
+    crossfade: 2.5,        // seconds between explore and boss music
+    range: 45,             // metres; sounds further away are silent
+  },
+
   save: {
     key: 'frostbound.save.v1',
     autosaveInterval: 30,  // seconds
