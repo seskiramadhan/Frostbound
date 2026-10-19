@@ -112,8 +112,9 @@ HP +30%/level, damage +15%/level, names from `CONFIG.hunt.names`; everyone prese
   localStorage, navigator, performance, requestAnimationFrame, setTimeout, location, …).
 
 ## Music
-- User picked CC0 tracks: "Boss Battle Music" (SubspaceAudio) -> `audio/music/boss.mp3`,
-  "Medieval: Exploration" (RandomMind) -> `audio/music/explore.mp3`. User will push them.
+- CC0 tracks are in: "Boss Battle Music" (SubspaceAudio) -> `audio/music/boss.mp3`,
+  "Medieval: Exploration" (RandomMind) -> `audio/music/explore.mp3` (converted from the user's
+  WAVs to 128 kbps MP3 with ffmpeg; 2 MB + 3.8 MB). Keep music as mp3/ogg, never WAV.
 - User's Skyrim tracks (Dragonborn = boss, Far Horizons = explore) are personal only:
   `audio/music/local/` (git-ignored). Code should prefer local/ files when present.
 - Built: explore music everywhere, boss music while a dragon / the World-Eater is active, crossfade.
