@@ -9,7 +9,7 @@
 //                 reject  { msg }                  room full / different game version
 //                 hurt    { d, b, x, z }           an enemy hit you: raw damage, blocked?, from where
 //                 world   { list: [Enemy], slow }  every enemy's state, sendRate per second
-//                 ev      { n, id?, killer?, data? }  one-off world events (death, dragonRoar, dragonDowned, dragonDead, huntStart, bossPhase2, raid)
+//                 ev      { n, id?, killer?, data? }  one-off world events (death, dragonRoar, dragonDowned, dragonDead, huntStart, bossPhase2, raid, enemyShot)
 //                 joined  { id, name, look }
 //                 left    { id }
 //                 look    { id, look }
@@ -17,11 +17,11 @@
 //
 // Pose: [level, x, y, z, facing, state, stateTime, speed, flags, drawTime]
 //   level: 'valley' | dungeon key;  flags: 1 = grounded, 2 = bow mode, 4 = crouched, 8 = spell mode
-// Enemy: [id, level, x, y, z, facing, state, stateTime, hp, flags, (dragon: vx, vy, vz, bank, breathing)]
+// Enemy: [id, level, x, y, z, facing, state, stateTime, hp, flags, maxHp, lvl, (dragon: vx, vy, vz, bank, breathing)]
 //   flags: 1 = alive, 2 = visible
 import * as THREE from 'three';
 
-export const VERSION = 6;
+export const VERSION = 7;
 
 export const MSG = {
   HELLO: 'hello', POSE: 'pose', LOOK: 'look', HIT: 'hit', SHOUT: 'shout',
@@ -52,7 +52,8 @@ export function encodeLook(inventory) {
 export function encodeEnemy(e) {
   const p = e.pos;
   const flags = (e.alive ? 1 : 0) | (e.model.root.visible ? 2 : 0);
-  const a = [e.id, e.level.key ?? 'valley', r2(p.x), r2(p.y), r2(p.z), r2(e.facing), e.state, r2(e.stateTime), Math.round(e.hp), flags];
+  const a = [e.id, e.level.key ?? 'valley', r2(p.x), r2(p.y), r2(p.z), r2(e.facing), e.state, r2(e.stateTime), Math.round(e.hp), flags,
+    Math.round(e.maxHp), e.lvl ?? 0];
   if (e.kind === 'dragon') a.push(r2(e.vel.x), r2(e.vel.y), r2(e.vel.z), r2(e.bank), e.breathing > 0 ? 1 : 0);
   return a;
 }

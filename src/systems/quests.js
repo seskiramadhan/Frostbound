@@ -86,6 +86,18 @@ export const QUESTS = {
     ],
     reward: w => { w.inventory.addGold(V.rewards.blade); w.inventory.add('healPotion', 2); },
   },
+  banditCamp: {
+    name: 'Bandits in the Woods',
+    steps: [
+      { text: 'Find the bandit camp in the western forest', done: w => !!w.visited.camp,
+        target: w => ({ level: w.valley, pos: w.camp.center }) },
+      { text: 'Defeat the Bandit Chief', done: w => !!w.flags.chiefSlain,
+        target: w => ({ level: w.valley, pos: w.banditChief.alive ? w.banditChief.pos : w.camp.center }) },
+      { text: 'Tell Ulf the camp is broken', done: w => !!w.flags.banditsReported,
+        target: w => ({ level: w.valley, pos: w.npc('hunter') }) },
+    ],
+    reward: w => { w.inventory.addGold(V.rewards.bandits); w.inventory.add('healPotion', 1); },
+  },
   jarlLetter: {
     name: 'A Letter for the Jarl',
     steps: [

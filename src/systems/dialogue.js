@@ -131,6 +131,17 @@ function hunter(c) {
   const { quests: q, flags, inventory: inv } = c;
   const o = [];
   let text = 'The wolves are bold this winter. Good pelts on them, though.';
+  if (!q.has('banditCamp')) {
+    o.push({ label: 'Anything else troubling you?', run: () => {
+      q.start('banditCamp');
+      c.done('Bandits. They\'ve made camp in the western forest and they rob anyone on the road. Their chief is a brute. Break them, and I\'ll make it worth your while.'); return true;
+    } });
+  } else if (q.stepText('banditCamp') === 'Tell Ulf the camp is broken') {
+    o.push({ label: 'The bandit chief is dead.', run: () => {
+      flags.banditsReported = true;
+      c.done('Ha! The road\'s safe again, for a while. Here, you earned this.'); return true;
+    } });
+  }
   if (!q.has('hunterPelts')) {
     o.push({ label: 'Need help with the wolves?', run: () => {
       q.start('hunterPelts');

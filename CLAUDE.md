@@ -130,12 +130,13 @@ src/
   camera.js            # third-person orbit camera (pulls in at walls, shake)
   world/               # terrain, props, environment (fog/light/snow), dungeon (ASCII maps,
                        # entrances, word walls), village (Frosthollow), summit (boss arena),
-                       # defenses (barricades, bell, watchtower), chest, fx (particles)
+                       # defenses (barricades, bell, watchtower), camp (bandits), chest, fx
   entities/            # player, creature (wolf/draugr AI) + wolfModel/draugrModel,
                        # dragon, npc (villagers), remotePlayer (co-op), model (helpers)
   systems/             # events, entities (id registry), physics, combat, inventory,
                        # skills, shouts, projectiles (arrows), magic (fire), stealth
                        # (meter, witnesses), raid (waves, guards), jobs (Jarl's requests),
+                       # levels (player level, enemy level scaling),
                        # quests, dialogue, save
   ui/                  # hud, menu (Bag: Items/Shouts/Skills/Quests/Co-op), dialog, coop panel
   version.js, updater.js # build number + update check; one-click update past the cache
@@ -165,6 +166,9 @@ src/
   entity ids for co-op) and reused; the host runs waves and emits 'raid' events. Barricades are
   entities (`kind: 'barricade'`, `fixed`); dragons only target `kind: 'player'`. The valley has
   `platforms` (watchtower top) that `heightAt` stands on.
+- **Enemy levels** (`systems/levels.js`): every creature config has a design level `lvl`; `scales: true`
+  (or a refilled dungeon) makes it match the player's level. `scaleCreature` in main.js runs on every
+  respawn (`creature.onRespawn`). Archers are creatures with `ranged: true` ('creatureShoot').
 - **Jarl's requests** (`systems/jobs.js`): repeatable quest `jarlJob`, restarted per job
   (`quests.restart`), text from the current job.
 - **Hits/deaths go through the event bus** (`attack`, `areaAttack`, `damage`, `blocked`,

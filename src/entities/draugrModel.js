@@ -1,5 +1,6 @@
 // Draugr: withered undead Nord in rags with a notched ancient sword and glowing eyes.
-// Colours/posture come from cfg (rag, metal, eye, hunch), so the same body also makes village guards.
+// Colours/posture come from cfg (rag, metal, eye, hunch), so the same body also makes village guards
+// and bandits. cfg.ranged swaps the sword for a bow.
 import * as THREE from 'three';
 import { box, blobShadow, clamp01, lerp } from './model.js';
 
@@ -41,11 +42,23 @@ export function build(cfg) {
     torso.add(pivot);
     return pivot;
   });
-  const sword = new THREE.Group();
-  sword.add(box(0.05, 0.18, 0.05, 0x2a2420, 0, -0.66, 0));
-  sword.add(box(0.24, 0.05, 0.07, metal, 0, -0.76, 0));
-  sword.add(box(0.09, 0.8, 0.03, 0x707a76, 0, -1.18, 0));
-  arms[0].add(sword);
+  if (cfg.ranged) {                          // short bow in the left hand
+    const R = 0.5, ARC = Math.PI * 0.75;     // same construction as the player's bow
+    const grip = new THREE.Group();
+    grip.position.set(0, -0.6, 0);
+    grip.rotation.y = Math.PI / 2;
+    const limbs = new THREE.Mesh(new THREE.TorusGeometry(R, 0.03, 4, 8, ARC), new THREE.MeshLambertMaterial({ color: 0x5a3e22, flatShading: true }));
+    limbs.rotation.z = -Math.PI / 2 - ARC / 2;
+    limbs.position.y = R;
+    grip.add(limbs);
+    arms[1].add(grip);
+  } else {
+    const sword = new THREE.Group();
+    sword.add(box(0.05, 0.18, 0.05, 0x2a2420, 0, -0.66, 0));
+    sword.add(box(0.24, 0.05, 0.07, metal, 0, -0.76, 0));
+    sword.add(box(0.09, 0.8, 0.03, 0x707a76, 0, -1.18, 0));
+    arms[0].add(sword);
+  }
 
   return { root, body, torso, head, legs, arms, shadow: blobShadow(0.5 * cfg.scale) };
 }
@@ -62,11 +75,13 @@ export function animate({ body, torso, legs, arms }, c) {
 
   const t = c.stateTime;
   switch (c.state) {
-    case 'windup':                       // sword raised high: the tell
+    case 'windup':                       // sword raised high (or bow drawn): the tell
+      if (c.cfg.ranged) { arms[1].rotation.set(-1.5, 0, 0); arms[0].rotation.set(-1.4, 0, lerp(0, -0.8, clamp01(t / 0.6))); break; }
       arms[0].rotation.x = lerp(-0.5, -2.8, clamp01(t / 0.35));
       torso.rotation.x = 0.05;
       break;
-    case 'bite':                         // overhead chop
+    case 'bite':                         // overhead chop (archers: release)
+      if (c.cfg.ranged) { arms[1].rotation.set(-1.5, 0, 0); arms[0].rotation.set(-1.2, 0, -0.2); break; }
       arms[0].rotation.x = lerp(-2.8, -0.9, clamp01(t / 0.12));
       torso.rotation.x = 0.35;
       break;

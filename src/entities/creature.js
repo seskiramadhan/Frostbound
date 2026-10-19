@@ -4,6 +4,8 @@
 // A crouching player is noticed gradually (`notice` 0..1) instead of on sight.
 // cfg.team / cfg.hunts turn the same AI into village guards (team 'player', hunting 'beast').
 // Raiders (cfg.raider) march on their home (the village) and also attack barricades.
+// Archers (cfg.ranged) keep their distance and shoot: they emit 'creatureShoot' instead of 'attack'.
+// onRespawn(creature), if set, rescales it (enemy levels) every time it comes back.
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { Flash, lerpAngle } from './model.js';
@@ -72,6 +74,8 @@ export class Creature {
     this.walkPhase = 0;
     this.speed = 0;
     this.model.root.visible = this.model.shadow.visible = true;
+    this.lvl ??= this.cfg.lvl ?? 1;
+    this.onRespawn?.(this);
   }
 
   get blocking() { return false; }
@@ -91,7 +95,7 @@ export class Creature {
     for (const e of this.entities) {
       if (e.team !== this.hunts || !e.alive || e.level !== this.level) continue;
       if (e.kind === 'barricade' && !this.cfg.raider) continue;
-      if (Math.abs(e.pos.y - this.pos.y) > 2.5) continue;      // out of reach (watchtower)
+      if (Math.abs(e.pos.y - this.pos.y) > 2.5 && !this.cfg.ranged) continue;   // out of reach (watchtower), unless shooting
       const d = this.pos.distanceToSquared(e.pos);
       if (this.target === e) { if (d < bestD) { bestD = d; best = e; } continue; }
       if (d >= bestD || !this.level.lineOfSight(this.pos, e.pos)) continue;
@@ -168,6 +172,19 @@ export class Creature {
         break;
       case 'chase':
         if (!tgt) { this.#setState('wander', 0); this.wanderTo.copy(this.pos); break; }
+        if (this.cfg.ranged) {                                 // archer: back off if crowded, shoot from range
+          face = faceT;
+          if (toT < this.cfg.keepAway) {
+            const k = 3 / Math.max(toT, 0.1);
+            this.wanderTo.set(this.pos.x + (this.pos.x - tgt.pos.x) * k, 0, this.pos.z + (this.pos.z - tgt.pos.z) * k);
+            goal = this.wanderTo; speed = this.cfg.walkSpeed * 1.6;
+          } else if (toT < this.cfg.shootRange && this.level.lineOfSight(this.pos, tgt.pos)) {
+            this.#setState('windup', range(this.cfg.windup));
+          } else {
+            goal = tgt.pos; speed = this.cfg.runSpeed;
+          }
+          break;
+        }
         if (toT < this.cfg.circleRange && !this.#mayAttack()) {   // wait for a turn, circling a little
           face = faceT;
           const side = this.id % 2 ? 1 : -1, a = faceT + side * Math.PI / 2;
@@ -186,11 +203,14 @@ export class Creature {
         break;
       case 'bite':
         if (this.stateTime < this.cfg.biteAt) {
-          this.vel.x = Math.sin(this.facing) * this.cfg.lungeSpeed;
-          this.vel.z = Math.cos(this.facing) * this.cfg.lungeSpeed;
+          if (!this.cfg.ranged) {
+            this.vel.x = Math.sin(this.facing) * this.cfg.lungeSpeed;
+            this.vel.z = Math.cos(this.facing) * this.cfg.lungeSpeed;
+          }
         } else if (!this.struck) {
           this.struck = true;
-          this.events.emit('attack', { attacker: this, damage: this.cfg.biteDamage, reach: this.cfg.biteReach, arc: this.cfg.biteArc });
+          if (this.cfg.ranged) { if (tgt) this.events.emit('creatureShoot', { shooter: this, target: tgt, damage: this.cfg.biteDamage }); }
+          else this.events.emit('attack', { attacker: this, damage: this.cfg.biteDamage, reach: this.cfg.biteReach, arc: this.cfg.biteArc });
         }
         if (this.stateTime >= this.cfg.biteTime) this.#setState('recover', range(this.cfg.recover));
         break;

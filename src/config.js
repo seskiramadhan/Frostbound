@@ -59,6 +59,7 @@ export const CONFIG = {
     treeMaxHeight: 30,     // no trees above this terrain height
     treeMaxSlope: 0.8,     // min normal.y for a tree
     clearRadius: 26,       // keep the centre clear
+    clearings: [[-72, -32, 13]],  // other open spots: [x, z, radius] (bandit camp)
     treeCollideRadius: 0.6,
     rockCollideScale: 0.8,
   },
@@ -162,11 +163,13 @@ export const CONFIG = {
     scale: 1,
     fur: 0x8c9096,
     body: 'wolf',          // model module: wolf | draugr
+    lvl: 1,                // design level (shown on health bars); see `levels`
   },
 
   // Overrides on top of `wolf` for the den's pack leader
   alphaWolf: {
     name: 'Alpha Wolf',
+    lvl: 3,
     boss: true,
     saveKey: 'alpha',
     maxHealth: 110,
@@ -184,6 +187,7 @@ export const CONFIG = {
   // Overrides on top of `wolf` (same AI, different body)
   draugr: {
     name: 'Draugr',
+    lvl: 4,
     body: 'draugr',
     fur: 0x7d8783,         // skin
     maxHealth: 55,
@@ -209,6 +213,7 @@ export const CONFIG = {
   },
   draugrWight: {
     name: 'Draugr Wight',
+    lvl: 6,
     boss: true,
     saveKey: 'wight',
     body: 'draugr',
@@ -232,6 +237,43 @@ export const CONFIG = {
     recover: [1.0, 1.6],
     healRate: 0,
     corpseTime: 12,
+  },
+
+  // Bandits: humans with swords or bows. A camp in the forest, and a raid wave. They scale with you.
+  bandit: {
+    name: 'Bandit', body: 'draugr', fur: 0xc99a74, rag: 0x5a4632, metal: 0x6a6258, eye: 0x1a1410, hunch: 0.05,
+    lvl: 3, scales: true,
+    maxHealth: 50, radius: 0.45, walkSpeed: 1.6, runSpeed: 5.2, turnSpeed: 8,
+    detectRadius: 16, loseRadius: 28, leashRadius: 32, wanderRadius: 6, packSpread: 6,
+    attackRange: 2.1, circleRange: 3.2, attackersAtOnce: 2,
+    windup: [0.5, 0.8], lungeSpeed: 4, biteAt: 0.1, biteTime: 0.35, biteDamage: 11, biteReach: 1.8, biteArc: 0.9,
+    recover: [0.8, 1.4], healRate: 3, corpseTime: 10, respawnTime: 300,
+    goldDrop: [4, 12],      // gold looted from the body
+  },
+  banditArcher: {           // overrides on top of `bandit`: keeps its distance and shoots arrows
+    name: 'Bandit Archer', rag: 0x3e4a32, ranged: true, maxHealth: 38,
+    shootRange: 20, keepAway: 7, windup: [0.9, 1.2], biteDamage: 9, biteAt: 0.05, biteTime: 0.3, recover: [1.2, 1.8],
+  },
+  banditChief: {            // overrides on top of `bandit`
+    name: 'Bandit Chief', lvl: 6, lvlOffset: 2, scale: 1.2, metal: 0x8a6a3a, rag: 0x6a2a24,
+    maxHealth: 140, biteDamage: 18, biteReach: 2.1, attackRange: 2.4, windup: [0.7, 1.0],
+    goldDrop: [40, 70],
+  },
+  camp: {
+    name: 'Bandit Camp',
+    at: [-72, -32],         // in the western forest
+    bandits: 3, archers: 2, // plus the chief
+    chestRefill: 600,       // seconds before the camp chest has loot again
+  },
+
+  // Enemy levels. Your level comes from your skills. "Fixed" enemies keep their design level
+  // (`lvl`); "scaling" ones (`scales: true`, plus anything in a refilled dungeon) match your level
+  // (+ `lvlOffset`), never below their design level. Stats grow per level above the design level.
+  levels: {
+    skillUpsPerLevel: 2,    // player level = 1 + (skill levels gained, all skills) / this
+    hpPerLevel: 0.1,        // +10% health per level above the design level
+    dmgPerLevel: 0.06,      // +6% damage per level
+    max: 40,
   },
 
   dungeon: {
@@ -283,6 +325,7 @@ export const CONFIG = {
     denTreasure: { items: { steelSword: 1, minorPotion: 2 }, gold: 60 },
     barrowHall:  { items: { huntingBow: 1, minorPotion: 2 }, gold: 30 },
     barrowCrypt: { items: { ancestorBlade: 1 }, gold: 20 },
+    banditChest: { items: { healPotion: 1, minorPotion: 1 }, gold: 90 },
     // Village strongboxes (stealing)
     jarlCoffer:  { items: { healPotion: 1 }, gold: 70 },
     ingridBox:   { items: { minorPotion: 2 }, gold: 45 },
@@ -408,7 +451,7 @@ export const CONFIG = {
       ['minorPotion', 30], ['healPotion', 70], ['steelSword', 160], ['hideArmor', 90],
       ['ironArmor', 260], ['huntingBow', 110], ['longbow', 240], ['fireTome', 80],
     ],
-    rewards: { pelts: 60, blade: 120, letter: 40, barrow: 100, report: 75 },
+    rewards: { pelts: 60, blade: 120, letter: 40, barrow: 100, report: 75, bandits: 150 },
     peltsWanted: 3,
   },
 
@@ -442,8 +485,6 @@ export const CONFIG = {
   postGame: {
     dragonEvery: [360, 600], // seconds between random dragon attacks in the valley
     dungeonRespawn: 600,     // seconds before a cleared dungeon refills (on entry)
-    tierHp: 0.4,             // per respawn tier: +40% enemy health
-    tierDmg: 0.25,           // +25% enemy damage
     tierLoot: { items: { healPotion: 2 }, goldPerTier: 80 },
     ngHp: 0.5,               // New Game+: +50% enemy health per NG level
     ngDmg: 0.3,
@@ -458,11 +499,9 @@ export const CONFIG = {
       { spawn: [-64, 4], barricade: [-21, 4] },
       { spawn: [0, 62], barricade: [0, 22] },
     ],
-    waves: [{ wolf: 4 }, { draugr: 5 }, { draugr: 3, warlord: 1 }],
+    waves: [{ wolf: 4 }, { bandit: 2, banditArcher: 2 }, { draugr: 5 }, { draugr: 3, warlord: 1 }],
     warning: 8,              // seconds after ringing the bell before wave 1
     wavePause: 6,            // seconds between waves
-    hpPerLevel: 0.25,        // each raid won makes the next tougher
-    dmgPerLevel: 0.15,
     barricadeHp: 160,
     repairCost: 15,          // gold to fix one barricade
     reward: { gold: 150, goldPerLevel: 75, firstWinItem: 'warlordAxe' },
@@ -471,10 +510,10 @@ export const CONFIG = {
     bell: [-4.5, 3.5],
     tower: { x: 4, z: 17, height: 5, size: 3.2 },
     // Creature overrides (on top of wolf / draugr) for raiders and guards
-    raider: { raider: true, leashRadius: 999, detectRadius: 20, loseRadius: 30, wanderRadius: 5, healRate: 0, corpseTime: 6, marchSpeed: 3.2 },
-    warlord: { name: 'Draugr Warlord', body: 'draugr', boss: true, fur: 0x5d6866, metal: 0x2e2a26, eye: 0xff7a3a, scale: 1.4,
+    raider: { raider: true, scales: true, leashRadius: 999, detectRadius: 20, loseRadius: 30, wanderRadius: 5, healRate: 0, corpseTime: 6, marchSpeed: 3.2 },
+    warlord: { name: 'Draugr Warlord', body: 'draugr', boss: true, lvl: 6, lvlOffset: 2, fur: 0x5d6866, metal: 0x2e2a26, eye: 0xff7a3a, scale: 1.4,
       maxHealth: 260, radius: 0.6, biteDamage: 24, biteReach: 2.4, attackRange: 2.6, windup: [0.8, 1.1] },
-    guard: { name: 'Village Guard', body: 'draugr', team: 'player', hunts: 'beast', fur: 0xd9b08c, rag: 0x5a2a28, metal: 0x8a9098,
+    guard: { name: 'Village Guard', body: 'draugr', team: 'player', hunts: 'beast', lvl: 2, scales: true, fur: 0xd9b08c, rag: 0x5a2a28, metal: 0x8a9098,
       eye: 0x2a2018, hunch: 0, maxHealth: 120, biteDamage: 10, detectRadius: 16, loseRadius: 22, leashRadius: 20,
       wanderRadius: 2, healRate: 2, walkSpeed: 1.6, runSpeed: 4.6, attackersAtOnce: 2, corpseTime: 99 },
   },
@@ -489,8 +528,7 @@ export const CONFIG = {
 
   // Co-op dragon hunts (N3): each hunt level makes the next dragon tougher.
   hunt: {
-    hpPerLevel: 0.3,       // +30% health per hunt level
-    dmgPerLevel: 0.15,     // +15% damage per hunt level
+    lvl: 5,                // dragons in hunts/attacks: design level (they scale with you from there)
     goldPerLevel: 120,     // reward for everyone present
     names: ['Elder Dragon', 'Frost Dragon', 'Blood Dragon', 'Ancient Dragon', 'Revered Dragon', 'Legendary Dragon'],
   },

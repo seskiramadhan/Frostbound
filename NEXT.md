@@ -1,8 +1,9 @@
 # NEXT.md — where Frostbound stands and what's pending
 
 Read this first in a new session, then `CLAUDE.md` for the rules.
-Last updated: 2026-10-19 (round 5 "Jarl's requests + raids" built on branch `raids`, build 3, awaiting test/merge).
-**Next after it's merged and tested: grow the main story (roadmap #3), or fixes from the user's playtest.**
+Last updated: 2026-10-19 (round 6 "bandits + enemy levels" on branch `bandits`, build 4; then the Greybeards
+and day/night + rocks rounds follow on stacked branches; see the table below).
+**Next:** the user merges and tests each PR in order.
 
 ## Live now (merged to `master`, deployed to GitHub Pages)
 https://seskiramadhan.github.io/Frostbound/
@@ -23,7 +24,8 @@ https://seskiramadhan.github.io/Frostbound/
 | Round 4 | Sneak + stealing, fire magic + Magicka, hold-to-switch shouts, fewer draw calls | #13 |
 | Music | CC0 tracks `audio/music/boss.mp3` + `explore.mp3` (converted from the user's WAVs) | #14 |
 | Update button | Bag ↻ re-downloads every game file past the cache; "New version available" notice; build 2 | #15 |
-| Round 5 | Raids on Frosthollow + the Jarl's requests (build 3) | round-5 PR (branch `raids`) |
+| Round 5 | Raids on Frosthollow + the Jarl's requests (build 3) | #17 |
+| Round 6 | Bandits (camp, archers, chief, raid wave) + enemy levels (build 4) | round-6 PR (branch `bandits`) |
 
 **Story today (with round 2):** start in Frosthollow → The Jarl's Summons (talk to Jarl Hrolf) →
 The Howling Den (den, alpha, treasure, report to Jarl) → Dragon Rising (barrow, FUS word wall, dragon,
@@ -62,7 +64,25 @@ higher build than `src/version.js` `BUILD` (checked on load and every 10 min), a
 "Build N" at the bottom. **Bump both numbers in every PR.** Build 2 = this feature.
 Devices still on build 1 or older need one last manual refresh/cache clear to get the button.
 
-**Round 5 (built, awaiting test): raids + the Jarl's requests**
+**Round 6 (built, awaiting test): bandits + enemy levels**
+- **Enemy levels** (`systems/levels.js`): your level = 1 + (skill levels gained, all skills) / 2, shown in the
+  Skills tab and announced on level-up. Every enemy has a design level `lvl`. **Fixed** enemies keep it
+  (valley wolves 1, den 1/Alpha 3, barrow draugr 4/Wight 6, story dragon, World-Eater). **Scaling** ones
+  (`scales: true`: bandits, raiders, raid guards, hunt/attack dragons, anything in a refilled dungeon)
+  fight at your level (+ `lvlOffset`), never below their design level: +10% health, +6% damage per level
+  above it. Applied on every respawn (`creature.onRespawn` → `scaleCreature`). NG+ multiplies on top.
+  Health bars show "Name · Lv N". The old post-game tier stat bonus is gone (tiers now only mean loot).
+- **Bandits** (human version of the draugr body): camp in the western forest at (-72, -32) (trees kept out
+  by `props.clearings`): 3 bandits, 2 **archers** (`ranged`: keep their distance, shoot real arrows via
+  'creatureShoot' → projectiles; they can hit you on the watchtower) and the **Bandit Chief** (Lv +2).
+  Respawn after 5 min, drop gold. Camp chest refills every 10 min.
+  Side quest **Bandits in the Woods** (Ulf): find the camp, kill the chief, report → 150 gold + potion.
+  Jarl job **Clear out the bandit camp**. Raids now have **4 waves**: wolves → bandits (2 + 2 archers) →
+  draugr → draugr + Warlord.
+- Co-op: protocol v7 (enemy list carries maxHp + level; 'enemyShot' world event gives guests a harmless
+  copy of each bandit arrow to see).
+
+**Round 5 (merged): raids + the Jarl's requests**
 - **Raids:** ring the **bell** in the square (after The Howling Den, host/solo only, not while a dragon is up)
   or take the Jarl's "Defend" job. Villagers hide; 2 **guards** (same AI as creatures, `team: 'player'`,
   `hunts: 'beast'`) defend. After an 8 s warning, 3 waves march in along 3 lanes (east, west, south):
@@ -94,7 +114,7 @@ Every PR: bump the build number, keep old saves loading, and put a short "What's
 | **2** | **Jarl's requests** (bounty board, Skyrim-style radiant jobs): ✅ round 5 | Talk to the Jarl → "Any work?" → one random job at a time: clear a dungeon (refills it), hunt the wolf pack, slay a dragon over the valley, defend the village (starts a raid). Gold grows with each finished job. Shown in the quest log like other quests. | Small–medium | ✅ Built (round 5) |
 | **3** | **More Skyrim main story** (Greybeards) | A **new main quest** between Dragon Rising and The World-Eater (added as a new quest, not new steps, so saves stay valid): (a) after the first dragon, **"DOVAHKIIN!"** thunders from the mountain; (b) **"The Way of the Voice"**: climb to a High Hrothgar-style monastery halfway up the peak, where old masters test your shouts and teach a word; (c) **"The Horn"**: fetch an ancient horn from a barrow; (d) then the summit path opens. Optional: a **Dragonstone** in Bleakrock Barrow showing dragon burial sites. | Medium | **Next**, in small updates |
 
-**Dropped by the user:** bandits (forest camp + hideout) for now; "The Raiders' Nest" fort siege.
+**Dropped by the user:** "The Raiders' Nest" fort siege. (Bandits came back in round 6.)
 **Maybe later:** blacksmith + dragon bone gear, legendary dragon, buying a house, legendary skills,
 day/night, standable rocks, a Fire button / tutorial, a second region, co-op N4 relay.
 **Naming note:** some names are taken straight from Skyrim (shout words, "Unrelenting Force", "Dragonborn",
