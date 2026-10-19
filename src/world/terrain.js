@@ -23,7 +23,18 @@ export class Terrain {
       }
     }
     this.mesh = this.#buildMesh();
+    this.name = 'valley';
+    this.colliders = [];   // trees, rocks, cave mouth (filled in by props)
   }
+
+  // Keep bodies away from the terrain edge.
+  clamp(pos) {
+    const lim = this.half - CONFIG.player.worldMargin;
+    pos.x = Math.min(lim, Math.max(-lim, pos.x));
+    pos.z = Math.min(lim, Math.max(-lim, pos.z));
+  }
+
+  lineOfSight() { return true; }
 
   #shape(x, z) {
     const N = this.noise;

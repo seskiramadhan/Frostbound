@@ -1,9 +1,9 @@
-// The player: low-poly Nord with a sword, camera-relative movement on the terrain.
+// The player: low-poly Nord with a sword, camera-relative movement on the current level (valley or dungeon).
 // States: move, block, attack, stagger, dead. Driven by one command object per tick.
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { box, blobShadow, Flash, lerpAngle, lerp, clamp01 } from './model.js';
-import { moveBody, pushOutOfColliders, clampToWorld, settleOnGround, turnToward } from '../systems/physics.js';
+import { moveBody, pushOutOfColliders, settleOnGround, turnToward } from '../systems/physics.js';
 import { inArc } from '../systems/combat.js';
 
 const P = CONFIG.player, S = CONFIG.stats, CB = CONFIG.combat;
@@ -24,7 +24,8 @@ export function buildModel() {
     return pivot;
   });
 
-  body.add(box(0.56, 0.7, 0.32, 0x6b4c34, 0, 1.2, 0));        // leather tunic
+  const tunic = box(0.56, 0.7, 0.32, 0x6b4c34, 0, 1.2, 0);   // recoloured by armour
+  body.add(tunic);
   body.add(box(0.6, 0.1, 0.36, 0x2e231b, 0, 0.92, 0));        // belt
   body.add(box(0.66, 0.22, 0.4, 0x9a8f80, 0, 1.52, 0));       // fur mantle
   body.add(box(0.6, 0.85, 0.06, 0x4a5560, 0, 1.12, -0.2));    // cloak
@@ -39,7 +40,7 @@ export function buildModel() {
   // Arms pivot at the shoulder. Model faces +z, so arms[0] (-x) is the right arm.
   const arms = [-0.38, 0.38].map(x => {
     const pivot = new THREE.Group(); pivot.position.set(x, 1.5, 0);
-    pivot.add(box(0.17, 0.62, 0.2, 0x6b4c34, 0, -0.3, 0));
+    pivot.add(box(0.17, 0.62, 0.2, 0x6b4c34, 0, -0.3, 0));     // sleeve
     pivot.add(box(0.15, 0.14, 0.16, 0xd9b08c, 0, -0.66, 0)); // hand
     body.add(pivot);
     return pivot;
@@ -50,17 +51,18 @@ export function buildModel() {
   sword.add(box(0.06, 0.08, 0.06, 0x8a7a50, 0, -0.62, 0));    // pommel
   sword.add(box(0.05, 0.2, 0.05, 0x3a2a1e, 0, -0.72, 0));     // grip
   sword.add(box(0.3, 0.05, 0.08, 0x8a7a50, 0, -0.84, 0));     // crossguard
-  sword.add(box(0.08, 0.9, 0.03, 0xc9d0d8, 0, -1.31, 0));     // blade
+  const blade = box(0.08, 1, 0.03, 0xc9d0d8, 0, -0.86, 0);   // scaled/recoloured per weapon
+  blade.geometry.translate(0, -0.5, 0);
+  sword.add(blade);
   arms[0].add(sword);
 
   const shadow = blobShadow(0.55);
-  return { root, body, legs, arms, sword, shadow };
+  return { root, body, legs, arms, sword, blade, tunic, shadow };
 }
 
 export class Player {
-  constructor(scene, terrain, colliders, events, entities) {
-    this.terrain = terrain;
-    this.colliders = colliders;
+  constructor(scene, level, events, entities) {
+    this.level = level;
     this.events = events;
     this.entities = entities;
 
@@ -78,17 +80,25 @@ export class Player {
     this.model = buildModel();
     this.flash = new Flash(this.model.root);
     scene.add(this.model.root, this.model.shadow);
-    this.respawn();
+    // Set from equipment + skills by systems/stats.js
+    this.attackDamage = A.damage;
+    this.armor = 0;
+    this.blockReduction = B.reduction;
+    this.blockStaminaMul = 1;
+
+    const [sx, sz] = P.spawn;
+    this.respawn(level, new THREE.Vector3(sx, 0, sz), Math.PI);
   }
 
-  respawn() {
-    const [sx, sz] = P.spawn;
-    this.pos.set(sx, this.terrain.heightAt(sx, sz), sz);
+  // Place the player (full health) at `at` on `level`, facing `facing`.
+  respawn(level, at, facing) {
+    this.level = level;
+    this.pos.set(at.x, level.heightAt(at.x, at.z), at.z);
     this.prevPos.copy(this.pos);
     this.vel.set(0, 0, 0);
     this.vy = 0;
     this.grounded = true;
-    this.facing = Math.PI;          // radians, model faces +z at 0
+    this.facing = facing;           // radians, model faces +z at 0
     this.prevFacing = this.facing;
     this.hp = this.maxHp;
     this.stamina = this.maxStamina;
@@ -124,7 +134,7 @@ export class Player {
 
     if (!this.alive) {
       this.vel.set(0, 0, 0);
-      settleOnGround(this, dt, this.terrain, J.gravity);
+      settleOnGround(this, dt, this.level, J.gravity);
       return;
     }
 
@@ -160,10 +170,10 @@ export class Player {
     this.vel.x += (wx - this.vel.x) * k;
     this.vel.z += (wz - this.vel.z) * k;
 
-    moveBody(this, this.vel.x * dt, this.vel.z * dt, this.terrain, P.maxClimb);
-    pushOutOfColliders(this.pos, this.radius, this.colliders);
-    clampToWorld(this.pos, this.terrain, P.worldMargin);
-    settleOnGround(this, dt, this.terrain, J.gravity);
+    moveBody(this, this.vel.x * dt, this.vel.z * dt, this.level, P.maxClimb);
+    pushOutOfColliders(this.pos, this.radius, this.level.colliders);
+    this.level.clamp(this.pos);
+    settleOnGround(this, dt, this.level, J.gravity);
 
     const sp = Math.hypot(this.vel.x, this.vel.z);
     if (turnTo === null && this.state === 'move' && sp > 0.2) turnTo = Math.atan2(this.vel.x, this.vel.z);
@@ -180,7 +190,7 @@ export class Player {
         this.struck = true;
         this.vel.x += Math.sin(this.facing) * A.lunge;
         this.vel.z += Math.cos(this.facing) * A.lunge;
-        this.events.emit('attack', { attacker: this, damage: A.damage, reach: A.reach, arc: A.arc });
+        this.events.emit('attack', { attacker: this, damage: this.attackDamage, reach: A.reach, arc: A.arc });
       }
       if (t >= A.windup + A.recover) this.#setState('move');
     } else if (this.state === 'stagger') {
@@ -237,8 +247,9 @@ export class Player {
   onHit({ attacker, blocked }) {
     this.sinceHit = 0;
     if (blocked) {
-      const broke = this.stamina < B.staminaPerHit;
-      this.#spend(B.staminaPerHit);
+      const cost = B.staminaPerHit * this.blockStaminaMul;
+      const broke = this.stamina < cost;
+      this.#spend(cost);
       if (broke) this.#stagger(attacker, CB.stagger.guardBreak);
       return;
     }
@@ -252,6 +263,30 @@ export class Player {
     const dx = this.pos.x - attacker.pos.x, dz = this.pos.z - attacker.pos.z, d = Math.hypot(dx, dz) || 1;
     this.vel.x = dx / d * CB.stagger.knockback;
     this.vel.z = dz / d * CB.stagger.knockback;
+  }
+
+  // Armour takes a share of incoming damage (called by combat before applying it).
+  mitigate(amount) { return amount * (1 - this.armor / 100); }
+
+  heal(amount) { this.hp = Math.min(this.maxHp, this.hp + amount); }
+
+  // Teleport within/between levels without resetting health (doors).
+  moveTo(level, at, facing) {
+    this.level = level;
+    this.pos.set(at.x, level.heightAt(at.x, at.z), at.z);
+    this.prevPos.copy(this.pos);
+    this.vel.set(0, 0, 0);
+    this.vy = 0;
+    this.grounded = true;
+    this.facing = this.prevFacing = facing;
+    this.#setState('move');
+  }
+
+  setLook(weapon, armor) {
+    const { blade, tunic } = this.model;
+    blade.material.color.setHex(weapon.color);
+    blade.scale.y = weapon.length;
+    tunic.material.color.setHex(armor.color);
   }
 
   die() {
@@ -303,7 +338,7 @@ export class Player {
     }
     if (!this.grounded) { legs[0].rotation.x = 0.6; legs[1].rotation.x = -0.2; }
 
-    shadow.position.set(out.x, this.terrain.heightAt(out.x, out.z) + 0.05, out.z);
+    shadow.position.set(out.x, this.level.heightAt(out.x, out.z) + 0.05, out.z);
     return out;
   }
 }

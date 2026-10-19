@@ -1,21 +1,23 @@
 // Shared movement for anything that walks the valley: slope limit, tree/rock
 // colliders, world edge, gravity and body-vs-body separation.
 // A body has { pos, vel, vy, grounded, radius, alive }.
+// A level (valley terrain or a dungeon) has heightAt(x, z), clamp(pos), colliders,
+// and optionally blocked(x, z, r) for solid walls.
 
-export function moveBody(body, dx, dz, terrain, maxClimb) {
-  moveAxis(body, dx, 0, terrain, maxClimb);
-  moveAxis(body, 0, dz, terrain, maxClimb);
+export function moveBody(body, dx, dz, level, maxClimb) {
+  moveAxis(body, dx, 0, level, maxClimb);
+  moveAxis(body, 0, dz, level, maxClimb);
 }
 
-// Reject steps that climb steeper than the slope limit (or into a wall mid-air).
-function moveAxis(body, dx, dz, terrain, maxClimb) {
+// Reject steps into walls, or that climb steeper than the slope limit (or into a slope mid-air).
+function moveAxis(body, dx, dz, level, maxClimb) {
   if (dx === 0 && dz === 0) return;
   const p = body.pos;
   const nx = p.x + dx, nz = p.z + dz;
-  const hNew = terrain.heightAt(nx, nz);
-  const blocked = body.grounded
-    ? hNew - terrain.heightAt(p.x, p.z) > maxClimb * Math.hypot(dx, dz)
-    : hNew > p.y + 0.3;
+  const hNew = level.heightAt(nx, nz);
+  const blocked = level.blocked?.(nx, nz, body.radius) || (body.grounded
+    ? hNew - level.heightAt(p.x, p.z) > maxClimb * Math.hypot(dx, dz)
+    : hNew > p.y + 0.3);
   if (blocked) {
     if (dx) body.vel.x = 0; else body.vel.z = 0;
     return;
@@ -34,16 +36,10 @@ export function pushOutOfColliders(pos, r, colliders) {
   }
 }
 
-export function clampToWorld(pos, terrain, margin) {
-  const lim = terrain.half - margin;
-  pos.x = Math.min(lim, Math.max(-lim, pos.x));
-  pos.z = Math.min(lim, Math.max(-lim, pos.z));
-}
-
 // Grounded bodies stick to the terrain; airborne ones fall until they land.
-export function settleOnGround(body, dt, terrain, gravity) {
+export function settleOnGround(body, dt, level, gravity) {
   const p = body.pos;
-  const ground = terrain.heightAt(p.x, p.z);
+  const ground = level.heightAt(p.x, p.z);
   if (body.grounded) { p.y = ground; return; }
   body.vy -= gravity * dt;
   p.y += body.vy * dt;

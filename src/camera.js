@@ -5,9 +5,9 @@ import { CONFIG } from './config.js';
 const C = CONFIG.camera;
 
 export class ThirdPersonCamera {
-  constructor(camera, terrain) {
+  constructor(camera, level) {
     this.camera = camera;
-    this.terrain = terrain;
+    this.level = level;   // swapped when entering a dungeon
     this.yaw = 0;
     this.pitch = C.startPitch;
     this.target = new THREE.Vector3();
@@ -25,6 +25,9 @@ export class ThirdPersonCamera {
     this.pitch = Math.min(C.maxPitch, Math.max(C.minPitch, this.pitch + dy));
   }
 
+  // Jump straight to the new position next frame (after teleports).
+  snap() { this.snapped = false; }
+
   update(dt, playerPos) {
     this.target.set(playerPos.x, playerPos.y + C.height, playerPos.z);
     const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
@@ -34,9 +37,21 @@ export class ThirdPersonCamera {
       this.target.z + Math.cos(this.yaw) * cp * C.distance,
     );
 
-    // Keep the camera out of the ground
-    const floor = this.terrain.heightAt(this.desired.x, this.desired.z) + C.groundClearance;
-    if (this.desired.y < floor) this.desired.y = floor;
+    // Pull in when a wall is in the way, then keep out of the ground and under any ceiling
+    const lv = this.level, t = this.target, d = this.desired;
+    if (lv.blocked) {
+      const steps = 12;
+      let k = 1;
+      for (let i = 1; i <= steps; i++) {
+        const f = i / steps;
+        if (lv.blocked(t.x + (d.x - t.x) * f, t.z + (d.z - t.z) * f, 0.3)) { k = (i - 1) / steps; break; }
+      }
+      k = Math.max(k, C.minDistance / C.distance);
+      d.lerpVectors(t, d, k);
+    }
+    const floor = lv.heightAt(d.x, d.z) + C.groundClearance;
+    if (d.y < floor) d.y = floor;
+    if (lv.ceiling !== undefined) d.y = Math.min(d.y, lv.ceiling - C.ceilingClearance);
 
     const cam = this.camera;
     if (!this.snapped) { cam.position.copy(this.desired); this.snapped = true; }

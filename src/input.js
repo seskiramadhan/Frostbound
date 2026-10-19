@@ -1,17 +1,18 @@
 // Keyboard/mouse (pointer lock) and touch (left joystick, right-side gestures, buttons).
-// Produces one command object per fixed tick: { move, run, attack, block, jump }.
+// Produces one command object per fixed tick: { move, run, attack, block, jump, interact }.
+// The menu key/button calls onMenu() directly (it works while paused).
 import { CONFIG, IS_TOUCH } from './config.js';
 
 const C = CONFIG.input;
 
 export class Input {
-  constructor(canvas, joyBase, joyKnob, jumpBtn) {
+  constructor(canvas, joyBase, joyKnob, buttons) {
     this.canvas = canvas;
     this.joyBase = joyBase;
     this.joyKnob = joyKnob;
 
     // move: x = strafe right, y = forward, length 0..1
-    this.cmd = { move: { x: 0, y: 0 }, run: false, attack: false, block: false, jump: false };
+    this.cmd = { move: { x: 0, y: 0 }, run: false, attack: false, block: false, jump: false, interact: false };
     this.lookDX = 0;              // accumulated look deltas (radians), consumed by camera
     this.lookDY = 0;
 
@@ -24,9 +25,10 @@ export class Input {
     // Edge-triggered presses, held until the next tick reads them
     this.attackPressed = false;
     this.jumpPressed = false;
+    this.interactPressed = false;
 
     this.#bindKeyboardMouse();
-    if (IS_TOUCH) this.#bindTouch(jumpBtn);
+    if (IS_TOUCH) this.#bindTouch(buttons);
   }
 
   get active() { return IS_TOUCH || this.locked; }
@@ -43,10 +45,12 @@ export class Input {
 
     cmd.attack = this.attackPressed;
     cmd.jump = this.jumpPressed;
+    cmd.interact = this.interactPressed;
     cmd.block = this.mouseBlock || this.rightTouch?.mode === 'block';
 
     this.attackPressed = false;
     this.jumpPressed = false;
+    this.interactPressed = false;
     return cmd;
   }
 
@@ -80,9 +84,13 @@ export class Input {
   #bindKeyboardMouse() {
     addEventListener('keydown', e => {
       this.keys[e.code] = true;
-      if (e.code === 'Space') e.preventDefault();
-      if (e.repeat || !this.locked) return;
+      if (e.code === 'Space' || e.code === 'Tab') e.preventDefault();
+      if (e.repeat) return;
+      if (e.code === 'KeyI' || e.code === 'Tab') { this.onMenu?.(); return; }
+      if (e.code === 'Escape') { this.onEscape?.(); return; }
+      if (!this.locked) return;
       if (e.code === 'Space') this.jumpPressed = true;
+      if (e.code === 'KeyE') this.interactPressed = true;
     });
     addEventListener('keyup', e => { this.keys[e.code] = false; });
     addEventListener('blur', () => { this.keys = Object.create(null); this.mouseBlock = false; });
@@ -106,11 +114,13 @@ export class Input {
     document.addEventListener('contextmenu', e => e.preventDefault());
   }
 
-  #bindTouch(jumpBtn) {
+  #bindTouch(buttons) {
     const opts = { passive: false };
     const el = this.canvas;
-
-    jumpBtn.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); this.jumpPressed = true; }, opts);
+    const press = (btn, fn) => btn.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); fn(); }, opts);
+    press(buttons.jump, () => { this.jumpPressed = true; });
+    press(buttons.interact, () => { this.interactPressed = true; });
+    press(buttons.menu, () => this.onMenu?.());
 
     el.addEventListener('touchstart', e => {
       e.preventDefault();

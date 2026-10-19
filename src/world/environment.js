@@ -3,14 +3,34 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 
 export function setupEnvironment(scene) {
-  const F = CONFIG.fog, L = CONFIG.light;
+  const F = CONFIG.fog, L = CONFIG.light, T = CONFIG.dungeon.torch;
   scene.background = new THREE.Color(F.color);
   scene.fog = new THREE.Fog(F.color, F.near, F.far);
 
-  scene.add(new THREE.HemisphereLight(L.skyColor, L.groundColor, L.hemiIntensity));
+  const hemi = new THREE.HemisphereLight(L.skyColor, L.groundColor, L.hemiIntensity);
   const sun = new THREE.DirectionalLight(L.sunColor, L.sunIntensity);
   sun.position.set(...L.sunDir).multiplyScalar(100);
-  scene.add(sun);
+  // Warm light carried by the player underground. Always in the scene (intensity 0
+  // outside) so shaders don't recompile when switching.
+  const torch = new THREE.PointLight(T.color, 0, T.distance, 1.5);
+  scene.add(hemi, sun, torch);
+  return { scene, hemi, sun, torch };
+}
+
+// Switch lighting/fog between the open valley and a dungeon.
+export function applyAmbience(env, kind) {
+  const F = CONFIG.fog, L = CONFIG.light, DG = CONFIG.dungeon;
+  const inside = kind !== 'valley';
+  const fog = inside ? DG.fog : F;
+  env.scene.background.setHex(fog.color);
+  env.scene.fog.color.setHex(fog.color);
+  env.scene.fog.near = fog.near;
+  env.scene.fog.far = fog.far;
+  env.hemi.color.setHex(inside ? DG.light.hemiSky : L.skyColor);
+  env.hemi.groundColor.setHex(inside ? DG.light.hemiGround : L.groundColor);
+  env.hemi.intensity = inside ? DG.light.hemiIntensity : L.hemiIntensity;
+  env.sun.intensity = inside ? 0 : L.sunIntensity;
+  env.torch.intensity = inside ? DG.torch.intensity : 0;
 }
 
 export class Snow {

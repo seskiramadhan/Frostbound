@@ -31,7 +31,8 @@ export class Combat {
   applyHit(attacker, target, damage) {
     const ev = this.events;
     const blocked = !!target.blocking && inArc(target, attacker, Infinity, B.arc);
-    const amount = blocked ? damage * (1 - B.reduction) : damage;
+    let amount = blocked ? damage * (1 - (target.blockReduction ?? B.reduction)) : damage;
+    if (target.mitigate) amount = target.mitigate(amount);
     target.hp = Math.max(0, target.hp - amount);
     target.onHit({ amount, attacker, blocked });
     ev.emit(blocked ? 'blocked' : 'damage', { target, attacker, amount });
