@@ -1,0 +1,3 @@
+# Personal music (e.g. tracks you own but may not publish). Never committed.
+audio/music/local/*
+!audio/music/local/README.md
