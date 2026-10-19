@@ -61,7 +61,24 @@
   #hp { background: linear-gradient(#c8463c, #8e2620); }
   #st { background: linear-gradient(#6fb267, #3d7a3a); }
   #st-wrap { height: 6px; transition: opacity 0.6s; }
-  #st-wrap.full { opacity: 0.35; }
+  #st-wrap.full, #mk-wrap.full { opacity: 0.35; }
+  #mk { background: linear-gradient(#5a8fe0, #2a4f9a); }
+  #mk-wrap { height: 6px; display: none; transition: opacity 0.6s; }
+  /* Sneak: an eye that opens as enemies notice you */
+  #stealth {
+    position: fixed; left: 50%; bottom: calc(max(18px, env(safe-area-inset-bottom)) + 74px); transform: translateX(-50%);
+    z-index: 4; pointer-events: none; display: none; text-align: center; font-size: 10px; letter-spacing: 0.2em;
+    text-transform: uppercase; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  }
+  #stealth-eye {
+    width: 34px; height: 16px; margin: 0 auto 2px; border: 2px solid #d8d4c8; border-radius: 50%; position: relative;
+    transform: scaleY(var(--open, 0.15)); transition: transform 0.15s, border-color 0.2s; box-sizing: border-box;
+  }
+  #stealth-eye::after { content: ''; position: absolute; left: 11px; top: 2px; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  #stealth.caution #stealth-eye { border-color: #e8c86a; color: #e8c86a; }
+  #stealth.detected #stealth-eye { border-color: #e0503c; color: #e0503c; }
+  #stealth.caution { color: #e8c86a; }
+  #stealth.detected { color: #e0503c; }
 
   #target {
     position: fixed; left: 50%; top: calc(max(14px, env(safe-area-inset-top)) + 56px); transform: translateX(-50%);
@@ -178,6 +195,8 @@
   }
   #btn-shout.ready { border-color: #9fd8ff; box-shadow: 0 0 10px rgba(159, 216, 255, 0.45); }
   #btn-bow { right: max(96px, calc(env(safe-area-inset-right) + 78px)); bottom: max(170px, calc(env(safe-area-inset-bottom) + 152px)); display: none; }
+  #btn-crouch { right: max(18px, env(safe-area-inset-right)); bottom: max(250px, calc(env(safe-area-inset-bottom) + 232px)); }
+  #btn-crouch.on { border-color: #e8c86a; color: #e8c86a; }
   #shout-ind {
     position: fixed; right: 14px; bottom: 18px; z-index: 4; pointer-events: none; display: none; --cd: 100%;
     padding: 6px 12px; font-size: 13px; letter-spacing: 0.08em; border: 1px solid rgba(242, 239, 230, 0.35);
@@ -268,7 +287,9 @@
       <tr><td>Space</td><td>Jump</td></tr>
       <tr><td>E</td><td>Interact</td></tr>
       <tr><td>Q</td><td>Shout</td></tr>
-      <tr><td>B</td><td>Bow / sword</td></tr>
+      <tr><td>B</td><td>Sword / bow / fire</td></tr>
+      <tr><td>C</td><td>Sneak (crouch)</td></tr>
+      <tr><td>R</td><td>Switch shout</td></tr>
       <tr><td>I / Tab</td><td>Inventory</td></tr>
       <tr><td>Esc</td><td>Pause</td></tr>
     </table>
@@ -279,6 +300,8 @@
       <tr><td>Hold right</td><td>Block</td></tr>
       <tr><td>Bag</td><td>Inventory</td></tr>
       <tr><td>Bow mode</td><td>Hold right to draw, release to shoot</td></tr>
+      <tr><td>Fire</td><td>Tap right for Firebolt, hold for Flames</td></tr>
+      <tr><td>Hold Shout</td><td>Switch shout</td></tr>
     </table>
   </div>
 </div>
@@ -287,7 +310,9 @@
 <div id="bars">
   <div class="bar" id="hp-wrap"><i id="hp"></i></div>
   <div class="bar" id="st-wrap"><i id="st"></i></div>
+  <div class="bar" id="mk-wrap"><i id="mk"></i></div>
 </div>
+<div id="stealth"><div id="stealth-eye"></div><span id="stealth-text">Hidden</span></div>
 <div id="target"><span id="target-name"></span><div class="bar"><i id="target-hp"></i></div></div>
 <div id="hurt"></div>
 <div id="death"><h2>You Died</h2><div id="death-cta"></div></div>
@@ -296,6 +321,7 @@
 <button class="tbtn" id="btn-bag">Bag</button>
 <button class="tbtn" id="btn-shout"></button>
 <button class="tbtn" id="btn-bow">Bow</button>
+<button class="tbtn" id="btn-crouch">Sneak</button>
 <div id="shout-ind"></div>
 <div id="slowmo"></div>
 <div id="coop-chip"></div>

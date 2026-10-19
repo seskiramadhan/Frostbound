@@ -64,6 +64,7 @@ export class RemotePlayer {
     const span = b.t - a.t;
     const k = span > 0 ? Math.min(1, Math.max(0, (now - a.t) / span)) : 1;
     const pose = k < 0.5 ? pa : pb;
+    this.pose = pose;
 
     const visible = pose.level === levelKey;
     root.visible = shadow.visible = visible;
@@ -75,7 +76,7 @@ export class RemotePlayer {
     this.walkPhase += pose.speed * dt * 2.2;
 
     animate(this.model, {
-      speed: pose.speed, walkPhase: this.walkPhase, bowMode: pose.bowMode, state: pose.state,
+      speed: pose.speed, walkPhase: this.walkPhase, bowMode: pose.bowMode, spellMode: pose.spellMode, crouched: pose.crouched, state: pose.state,
       stateTime: pose.stateTime, drawTime: pose.drawTime, staggerTime: CONFIG.combat.stagger.player,
       grounded: pose.grounded,
     });

@@ -1,5 +1,6 @@
 // The player: low-poly Nord with a sword, camera-relative movement on the current level (valley or dungeon).
-// States: move, block, attack, draw (bow), shot, shout, stagger, dead. Driven by one command object per tick.
+// States: move, block, attack, draw (bow), shot, cast (firebolt), flames, shout, stagger, dead.
+// Driven by one command object per tick. Can crouch (sneak) in any state.
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { box, blobShadow, Flash, lerpAngle, lerp, clamp01 } from './model.js';
@@ -7,7 +8,7 @@ import { moveBody, pushOutOfColliders, settleOnGround, turnToward } from '../sys
 import { inArc } from '../systems/combat.js';
 
 const P = CONFIG.player, S = CONFIG.stats, CB = CONFIG.combat;
-const A = CB.attack, B = CB.block, J = CB.jump, AIM = CB.autoAim, BW = CONFIG.bow;
+const A = CB.attack, B = CB.block, J = CB.jump, AIM = CB.autoAim, BW = CONFIG.bow, SN = CONFIG.sneak, MG = CONFIG.magic;
 
 // Exported so co-op remote players can reuse the same look.
 export function buildModel() {
@@ -69,8 +70,14 @@ export function buildModel() {
   bow.visible = false;
   arms[1].add(bow);
 
+  // Fire in the left hand (spell mode)
+  const flame = new THREE.Mesh(new THREE.OctahedronGeometry(0.13, 0), new THREE.MeshBasicMaterial({ color: 0xff8a2a }));
+  flame.position.set(0, -0.8, 0.05);
+  flame.visible = false;
+  arms[1].add(flame);
+
   const shadow = blobShadow(0.55);
-  return { root, body, legs, arms, sword, blade, tunic, bow, shadow };
+  return { root, body, legs, arms, sword, blade, tunic, bow, flame, shadow };
 }
 
 export class Player {
@@ -85,6 +92,7 @@ export class Player {
     this.radius = P.radius;
     this.maxHp = S.maxHealth;
     this.maxStamina = S.maxStamina;
+    this.maxMagicka = S.maxMagicka;
 
     this.pos = new THREE.Vector3();
     this.prevPos = new THREE.Vector3();
@@ -101,6 +109,12 @@ export class Player {
     this.bowDamage = 0;
     this.hasBow = false;
     this.bowMode = false;
+    this.knowsFire = false;     // read the fire spell tome
+    this.spellMode = false;     // fire in the left hand: tap = Firebolt, hold = Flames
+    this.spellCostMul = 1;
+    this.fireDamage = MG.firebolt.damage;
+    this.sneakMul = 1;          // < 1 with Sneak skill: enemies notice you slower
+    this.crouched = false;
     this.aimHeight = 1.2;
 
     const [sx, sz] = P.spawn;
@@ -119,6 +133,9 @@ export class Player {
     this.prevFacing = this.facing;
     this.hp = this.maxHp;
     this.stamina = this.maxStamina;
+    this.magicka = this.maxMagicka;
+    this.magickaDelay = 0;
+    this.crouched = false;
     this.alive = true;
     this.state = 'move';
     this.stateTime = 0;
@@ -145,12 +162,20 @@ export class Player {
     this.#setState('shout');
   }
 
+  // Pay magicka for a spell. Returns false if there isn't enough.
+  #cast(cost) {
+    if (this.magicka < cost) { this.events.emit('noMagicka'); return false; }
+    this.magicka -= cost;
+    this.magickaDelay = S.magickaRegenDelay;
+    return true;
+  }
+
   #spend(cost) {
     this.stamina = Math.max(0, this.stamina - cost);
     this.staminaDelay = S.staminaRegenDelay;
   }
 
-  // Fixed-step update. cmd = { move: {x, y}, run, attack, block, draw, jump, toggleBow }, yaw = camera yaw.
+  // Fixed-step update. cmd = { move: {x, y}, run, attack, block, draw, jump, toggleBow, crouch }, yaw = camera yaw.
   tick(dt, cmd, yaw) {
     this.prevPos.copy(this.pos);
     this.prevFacing = this.facing;
@@ -172,21 +197,23 @@ export class Player {
     const mx = fx * cmd.move.y + rx * cmd.move.x;     // wanted direction (world, length 0..1)
     const mz = fz * cmd.move.y + rz * cmd.move.x;
 
-    if (cmd.toggleBow && this.hasBow && ['move', 'block'].includes(this.state)) {
-      this.bowMode = !this.bowMode;
-      this.events.emit('bowToggled', { bowMode: this.bowMode });
-    }
+    if (cmd.crouch) { this.crouched = !this.crouched; this.events.emit('crouch', { crouched: this.crouched }); }
+    if (cmd.toggleBow && ['move', 'block'].includes(this.state)) this.#nextMode();
     this.#advanceState();
     if (this.state === 'draw') {
       this.drawTime += dt;
       if (!cmd.draw) this.#shoot(this.drawTime);
+    } else if (this.state === 'flames') {
+      this.magicka = Math.max(0, this.magicka - MG.flames.costPerSec * this.spellCostMul * dt);
+      this.magickaDelay = S.magickaRegenDelay;
+      if (!cmd.draw || this.magicka <= 0) this.#setState('move');
     }
     if (this.state === 'move' || this.state === 'block') this.#chooseAction(cmd, mx, mz, camFacing);
 
     let wx = 0, wz = 0, turnTo = null, turnSpeed = P.turnSpeed;
     switch (this.state) {
       case 'move': {
-        const speed = cmd.run ? P.runSpeed : P.walkSpeed;
+        const speed = this.crouched ? P.walkSpeed * SN.speedMul : cmd.run ? P.runSpeed : P.walkSpeed;
         wx = mx * speed; wz = mz * speed;
         break;
       }
@@ -198,6 +225,7 @@ export class Player {
         turnTo = this.attackFacing; turnSpeed = A.turnSpeed;
         break;
       case 'draw':
+      case 'flames':
         wx = mx * P.walkSpeed * BW.moveMul; wz = mz * P.walkSpeed * BW.moveMul;
         turnTo = camFacing; turnSpeed = A.turnSpeed;
         break;
@@ -234,6 +262,8 @@ export class Player {
       if (t >= this.staggerTime) this.#setState('move');
     } else if (this.state === 'shot') {
       if (t >= 0.25) this.#setState('move');
+    } else if (this.state === 'cast') {
+      if (t >= MG.castTime) this.#setState('move');
     } else if (this.state === 'shout') {
       if (t >= 0.5) this.#setState('move');
     }
@@ -247,9 +277,31 @@ export class Player {
     this.#setState('shot');
   }
 
+  // Sword -> bow -> fire -> sword, skipping what you don't have.
+  #nextMode() {
+    const modes = ['sword', ...(this.hasBow ? ['bow'] : []), ...(this.knowsFire ? ['spell'] : [])];
+    if (modes.length < 2) return;
+    const cur = this.bowMode ? 'bow' : this.spellMode ? 'spell' : 'sword';
+    const next = modes[(modes.indexOf(cur) + 1) % modes.length];
+    this.bowMode = next === 'bow';
+    this.spellMode = next === 'spell';
+    this.events.emit('bowToggled', { bowMode: this.bowMode, spellMode: this.spellMode });
+  }
+
   // From move/block: start an attack or jump, else settle on move/block.
   #chooseAction(cmd, mx, mz, camFacing) {
-    if (this.bowMode) {
+    if (this.spellMode) {
+      if (cmd.draw && this.grounded && this.magicka > 1) { this.#setState('flames'); return; }
+      if (this.attackBuffer > 0 && this.grounded) {
+        this.attackBuffer = 0;
+        if (this.#cast(MG.firebolt.cost * this.spellCostMul)) {
+          this.facing = this.prevFacing = this.#autoAim(camFacing, 12, 0.6);
+          this.events.emit('castBolt', { caster: this, damage: this.fireDamage });
+          this.#setState('cast');
+          return;
+        }
+      }
+    } else if (this.bowMode) {
       if (cmd.draw && this.grounded) { this.drawTime = 0; this.#setState('draw'); return; }
       if (this.attackBuffer > 0 && this.grounded) { this.attackBuffer = 0; this.#shoot(0); return; }   // quick tap
     } else if (this.attackBuffer > 0 && this.grounded) {
@@ -267,7 +319,7 @@ export class Player {
       this.vy = J.velocity;
       this.grounded = false;
     }
-    const want = cmd.block && this.grounded && !this.bowMode ? 'block' : 'move';
+    const want = cmd.block && this.grounded && !this.bowMode && !this.spellMode ? 'block' : 'move';
     if (want !== this.state) this.#setState(want);
   }
 
@@ -291,6 +343,7 @@ export class Player {
       const mul = this.state === 'block' ? S.blockRegenMul : 1;
       this.stamina = Math.min(this.maxStamina, this.stamina + S.staminaRegen * mul * dt);
     }
+    if ((this.magickaDelay -= dt) <= 0) this.magicka = Math.min(this.maxMagicka, this.magicka + S.magickaRegen * dt);
     this.sinceHit += dt;
     if (this.sinceHit > S.healthRegenDelay) this.hp = Math.min(this.maxHp, this.hp + S.healthRegen * dt);
   }
@@ -355,8 +408,8 @@ export class Player {
   }
 }
 
-// Pose the model for a frame. `s` needs: speed, walkPhase, bowMode, state, stateTime,
-// drawTime, staggerTime, grounded. Shared with co-op remote players.
+// Pose the model for a frame. `s` needs: speed, walkPhase, bowMode, spellMode, crouched, state,
+// stateTime, drawTime, staggerTime, grounded. Shared with co-op remote players.
 export function animate(model, s) {
   const { body, legs, arms } = model;
   const walk = Math.min(1, s.speed / P.walkSpeed);
@@ -370,6 +423,8 @@ export function animate(model, s) {
 
   model.sword.visible = !s.bowMode;
   model.bow.visible = s.bowMode;
+  model.flame.visible = !!s.spellMode;
+  if (s.spellMode) model.flame.rotation.y += 0.15;
   if (s.bowMode && s.state !== 'draw' && s.state !== 'shot') armL.rotation.x = -0.5 + swing * 0.4;
 
   const t = s.stateTime;
@@ -385,6 +440,15 @@ export function animate(model, s) {
       armL.rotation.set(-1.55, 0, -0.15);
       armR.rotation.set(-1.2, 0, -0.3);
       break;
+    case 'flames':                                            // fire hand held out, flickering
+      armL.rotation.set(-1.5 + Math.sin(t * 30) * 0.04, 0, -0.1);
+      break;
+    case 'cast': {                                            // throw the firebolt
+      const k = Math.sin(clamp01(t / MG.castTime) * Math.PI);
+      armL.rotation.set(-0.4 - 1.2 * k, 0, -0.1);
+      body.rotation.y = 0.2 * k;
+      break;
+    }
     case 'shout': {
       const k = Math.sin(clamp01(t / 0.5) * Math.PI);
       body.rotation.x = 0.35 * k;
@@ -417,6 +481,11 @@ export function animate(model, s) {
       break;
   }
   if (!s.grounded) { legs[0].rotation.x = 0.6; legs[1].rotation.x = -0.2; }
+  if (s.crouched && s.state !== 'dead') {                     // sneaking: low, leaning in, knees bent
+    body.position.y -= 0.32;
+    body.rotation.x += 0.3;
+    legs[0].rotation.x -= 0.9; legs[1].rotation.x -= 0.9;
+  }
 
 }
 

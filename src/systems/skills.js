@@ -3,7 +3,7 @@
 import { CONFIG } from '../config.js';
 
 const K = CONFIG.skills;
-export const SKILL_IDS = ['oneHanded', 'archery', 'block'];
+export const SKILL_IDS = ['oneHanded', 'archery', 'block', 'destruction', 'sneak'];
 
 export function xpToNext(level) {
   return K.xpBase * K.xpGrowth ** (level - 1);
@@ -17,7 +17,9 @@ export class Skills {
       if (attacker !== player) return;
       if (source === 'melee') this.addXp('oneHanded', K.oneHanded.xpPerHit);
       else if (source === 'arrow') this.addXp('archery', K.archery.xpPerHit);
+      else if (source === 'fire') this.addXp('destruction', K.destruction.xpPerHit);
     });
+    events.on('sneakAttack', ({ attacker }) => { if (attacker === player) this.addXp('sneak', K.sneak.xpPerSneakAttack); });
     events.on('blocked', ({ target }) => { if (target === player) this.addXp('block', K.block.xpPerBlock); });
   }
 
@@ -55,7 +57,7 @@ export function applyStats(player, inventory, skills) {
   const I = CONFIG.items, B = CONFIG.combat.block;
   const weapon = I[inventory.equipped.weapon] ?? I.ironSword;
   const armor = I[inventory.equipped.armor] ?? I.clothes;
-  const oh = K.oneHanded, bl = K.block, ar = K.archery;
+  const oh = K.oneHanded, bl = K.block, ar = K.archery, de = K.destruction, sn = K.sneak, MG = CONFIG.magic;
   const bow = I[inventory.equipped.bow];
 
   player.attackDamage = weapon.damage * (1 + oh.damagePerLevel * (skills.level('oneHanded') - 1))
@@ -67,5 +69,12 @@ export function applyStats(player, inventory, skills) {
   player.bowDamage = bow ? bow.damage * (1 + ar.damagePerLevel * (skills.level('archery') - 1))
     * (skills.maxed('archery') ? ar.perk.damageMul : 1) : 0;
   if (!player.hasBow) player.bowMode = false;
+  const fireMul = 1 + de.damagePerLevel * (skills.level('destruction') - 1);
+  player.fireDamage = MG.firebolt.damage * fireMul;
+  player.flamesDamage = MG.flames.damagePerSec * fireMul;
+  player.spellCostMul = skills.maxed('destruction') ? de.perk.costMul : 1;
+  if (!player.knowsFire) player.spellMode = false;
+  player.sneakMul = 1 - sn.noticePerLevel * (skills.level('sneak') - 1);
+  player.sneakAttackMul = skills.maxed('sneak') ? sn.perk.attackMul : 1;
   player.setLook(weapon, armor);
 }

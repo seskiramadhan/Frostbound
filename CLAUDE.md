@@ -31,11 +31,11 @@ end of every piece of work (what's done, what's next).
 ## Controls
 - **Mobile:** left joystick = move (push far = run), drag right side = camera,
   tap right = attack, hold right = block (bow mode: hold = draw, release = shoot).
-  Buttons: Jump, Use (appears near doors/chests/word walls), Shout (cooldown ring),
-  Bow/Sword, Bag. Crouch button comes with Sneak.
+  Buttons: Jump, Use (appears near doors/chests/word walls), Shout (cooldown ring;
+  hold = switch shout), weapon (Sword/Bow/Fire), Sneak, Bag.
 - **Desktop:** WASD move, Shift run, mouse look (pointer lock), LMB attack
-  (bow: hold to draw), RMB block, Space jump, E interact, Q shout, B bow/sword,
-  I or Tab Bag, C crouch (with Sneak)
+  (bow: hold to draw; fire: click = Firebolt, hold = Flames), RMB block, Space jump,
+  E interact, Q shout, R switch shout, B sword/bow/fire, C sneak, I or Tab Bag
 - No dodge: removed on request (Skyrim has none)
 
 ## Core mechanics
@@ -94,7 +94,7 @@ competitive PvP, matchmaking, accounts/servers that cost money.
 - **Network-ready code (from Phase 2 on):** entities have numeric ids in a
   registry; hits/deaths go through the event bus only; input becomes one
   command object per tick (`{move, run, attack, block, draw, jump, interact,
-  shout, toggleBow}`).
+  shout, toggleBow, crouch, cycleShout}`).
 - **Co-op rules:**
   - Slow Time slows enemies only (never other players)
   - Menus and inventory don't pause the game while in co-op
@@ -134,7 +134,8 @@ src/
   entities/            # player, creature (wolf/draugr AI) + wolfModel/draugrModel,
                        # dragon, npc (villagers), remotePlayer (co-op), model (helpers)
   systems/             # events, entities (id registry), physics, combat, inventory,
-                       # skills, shouts, projectiles (arrows), quests, dialogue, save
+                       # skills, shouts, projectiles (arrows), magic (fire), stealth
+                       # (meter, witnesses), quests, dialogue, save
   ui/                  # hud, menu (Bag: Items/Shouts/Skills/Quests/Co-op), dialog, coop panel
   net/                 # transport (interface) + peerTransport, protocol, session,
                        # remoteBody (host side), mirror (guest side)
@@ -158,7 +159,9 @@ src/
 - **Creatures** share one AI (`entities/creature.js`); a config section picks the body
   (`body: 'wolf' | 'draugr'`). Bosses have `boss: true` + `saveKey`.
 - **Hits/deaths go through the event bus** (`attack`, `areaAttack`, `damage`, `blocked`,
-  `death`, each with `source`: melee/arrow/shout). Skills, HUD, loot and co-op listen.
+  `death`, each with `source`: melee/arrow/shout/fire). Skills, HUD, loot and co-op listen.
+- **Sneak:** creatures notice a crouching player gradually (`notice`); `unaware` (state
+  wander/return) enables sneak attacks, applied in `combat.applyHit`.
 - **Quests** are ordered steps with `done(world)` checked every tick (no stuck quests).
   Only ever **append** steps to an existing quest (step indices are saved). Story switches
   set in conversations live in `flags` (saved). NPC lines are in `systems/dialogue.js`.

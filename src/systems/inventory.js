@@ -54,7 +54,8 @@ export class Inventory {
     this.events.emit('inventory');
   }
 
-  // Equip gear or drink a potion. Returns true if something happened.
+  // Equip gear, drink a potion or read a spell tome. Returns true if something happened.
+  // Emits 'readTome' { id, spell } for tomes (main teaches the spell).
   use(id, player) {
     const def = ITEMS[id];
     if (!def || !this.count(id)) return false;
@@ -65,13 +66,18 @@ export class Inventory {
       this.events.emit('potionUsed', { id });
       return true;
     }
+    if (def.type === 'tome') {
+      this.remove(id);
+      this.events.emit('readTome', { id, spell: def.spell });
+      return true;
+    }
     if (['weapon', 'armor', 'bow'].includes(def.type)) { this.equip(id); return true; }
     return false;
   }
 
   // Grouped list for the UI: [{ type, entries: [{ id, def, count, equipped }] }]
   grouped() {
-    const order = ['weapon', 'bow', 'armor', 'potion', 'misc', 'quest'];
+    const order = ['weapon', 'bow', 'armor', 'potion', 'tome', 'misc', 'quest'];
     return order.map(type => ({
       type,
       entries: Object.keys(this.items).filter(id => ITEMS[id]?.type === type).map(id => ({

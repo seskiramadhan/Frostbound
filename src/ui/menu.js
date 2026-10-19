@@ -4,13 +4,14 @@ import { SKILL_IDS } from '../systems/skills.js';
 import { SHOUT_IDS } from '../systems/shouts.js';
 
 const $ = id => document.getElementById(id);
-const TYPE_NAMES = { weapon: 'Weapons', bow: 'Bows', armor: 'Apparel', potion: 'Potions', misc: 'Misc', quest: 'Quest items' };
+const TYPE_NAMES = { weapon: 'Weapons', bow: 'Bows', armor: 'Apparel', potion: 'Potions', tome: 'Books', misc: 'Misc', quest: 'Quest items' };
 
 function stat(def) {
   if (def.type === 'weapon' || def.type === 'bow') return `Damage ${def.damage}`;
   if (def.type === 'armor') return `Armor ${def.armor}`;
   if (def.type === 'potion') return `Restores ${def.heal} health`;
   if (def.type === 'quest') return 'Quest item';
+  if (def.type === 'tome') return 'Read to learn Firebolt + Flames';
   return `Value ${def.value}`;
 }
 
@@ -76,7 +77,7 @@ export class Menu {
         }
       }
     }
-    this.#row('m-hint').textContent = 'Tap an item to equip or drink it.';
+    this.#row('m-hint').textContent = 'Tap an item to equip, drink or read it.';
   }
 
   #renderQuests() {
@@ -135,6 +136,7 @@ export class Menu {
       perk.textContent = `Perk at max: ${K[id].perk.name} (${K[id].perk.desc})`;
       r.append(top, bar, perk);
     }
-    this.#row('m-hint').textContent = 'Skills grow by use: sword hits for One-Handed, arrow hits for Archery, blocked hits for Block.';
+    this.#row('m-hint').textContent = 'Skills grow by use: sword hits for One-Handed, arrow hits for Archery, blocked hits for Block, '
+      + 'fire spells for Destruction, and sneaking past enemies, sneak attacks and stealing for Sneak.';
   }
 }

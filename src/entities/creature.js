@@ -1,6 +1,7 @@
 // Ground creatures (wolves, draugr) share one AI: wander -> chase -> windup -> strike ->
 // recover, and give up (return home) when dragged too far. The look and animation come
 // from a model module picked by cfg.body. Valley wolves respawn; dungeon creatures stay dead.
+// A crouching player is noticed gradually (`notice` 0..1) instead of on sight.
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { Flash, lerpAngle } from './model.js';
@@ -9,7 +10,7 @@ import * as draugrModel from './draugrModel.js';
 import { moveBody, pushOutOfColliders, settleOnGround, turnToward } from '../systems/physics.js';
 import { mulberry32 } from '../world/noise.js';
 
-const W = CONFIG.wolf, CB = CONFIG.combat;
+const W = CONFIG.wolf, CB = CONFIG.combat, SN = CONFIG.sneak;
 const rand = mulberry32(9001);
 const range = ([a, b]) => a + rand() * (b - a);
 
@@ -60,6 +61,7 @@ export class Creature {
     this.alive = true;
     this.staggerTime = 0;
     this.target = null;
+    this.notice = 0;
     this.state = 'wander';
     this.stateTime = 0;
     this.timer = range(this.cfg.wanderPause);
@@ -70,6 +72,8 @@ export class Creature {
   }
 
   get blocking() { return false; }
+  // Not hunting anyone: open to a sneak attack. (State-based so co-op guests' mirrors agree.)
+  get unaware() { return this.alive && (this.state === 'wander' || this.state === 'return'); }
 
   #setState(s, timer = 0) {
     this.state = s; this.stateTime = 0; this.timer = timer;
@@ -77,14 +81,21 @@ export class Creature {
   }
 
   // Nearest living player within range; packmates share their quarry.
-  #acquire() {
+  // Sneaking players have to be noticed first.
+  #acquire(dt) {
     const r = this.target ? this.cfg.loseRadius : this.cfg.detectRadius;
-    let best = null, bestD = r * r;
+    let best = null, bestD = r * r, sneaker = null, sneakD = Infinity;
     for (const e of this.entities) {
       if (e.team !== 'player' || !e.alive || e.level !== this.level) continue;
       const d = this.pos.distanceToSquared(e.pos);
-      if (d < bestD && (this.target === e || this.level.lineOfSight(this.pos, e.pos))) { bestD = d; best = e; }
+      if (this.target === e) { if (d < bestD) { bestD = d; best = e; } continue; }
+      if (d >= bestD || !this.level.lineOfSight(this.pos, e.pos)) continue;
+      if (e.crouched) { if (d < sneakD) { sneakD = d; sneaker = e; } continue; }
+      bestD = d; best = e;
     }
+    if (!best && sneaker && this.#noticing(sneaker, Math.sqrt(sneakD), dt)) best = sneaker;
+    else if (!sneaker) this.notice = Math.max(0, this.notice - SN.forget * dt);
+    if (best) this.notice = 1;
     if (!best) {
       for (const m of this.pack) {
         const t = m !== this && m.alive && m.target;
@@ -92,6 +103,21 @@ export class Creature {
       }
     }
     return best;
+  }
+
+  // Grow awareness of a crouching player; true once fully noticed.
+  #noticing(e, dist, dt) {
+    const R = this.cfg.detectRadius * SN.radiusMul;
+    if (dist < SN.touchRadius) this.notice = 1;
+    else if (dist > R) this.notice = Math.max(0, this.notice - SN.forget * dt);
+    else {
+      const ahead = Math.abs(Math.atan2(Math.sin(Math.atan2(e.pos.x - this.pos.x, e.pos.z - this.pos.z) - this.facing),
+        Math.cos(Math.atan2(e.pos.x - this.pos.x, e.pos.z - this.pos.z) - this.facing))) < 1.3;
+      const rate = SN.noticeRate * (0.3 + 2 * (1 - dist / R)) * ((e.speed ?? 0) > 0.5 ? SN.movingMul : SN.stillMul)
+        * (ahead ? 1 : SN.behindMul) * (this.level.ceiling ? SN.darkMul : 1) * (e.sneakMul ?? 1);
+      this.notice = Math.min(1, this.notice + rate * dt);
+    }
+    return this.notice >= 1;
   }
 
   #mayAttack() {
@@ -114,7 +140,7 @@ export class Creature {
 
     const homeD = Math.hypot(this.pos.x - this.home.x, this.pos.z - this.home.z);
     if (this.state !== 'return') {
-      this.target = this.#acquire();
+      this.target = this.#acquire(dt);
       if (homeD > this.cfg.leashRadius) { this.target = null; this.#setState('return'); }
     }
 
@@ -205,6 +231,7 @@ export class Creature {
 
   onHit({ attacker }) {
     this.flash.trigger();
+    this.notice = 1;
     if (this.state === 'return') return;
     this.target = attacker;
     if (this.state !== 'bite') this.knockback(attacker.pos, CB.stagger.knockback, CB.stagger.enemy);

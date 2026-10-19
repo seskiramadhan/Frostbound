@@ -16,6 +16,8 @@ export class RemoteBody {
     this.level = null;
     this.facing = 0;
     this.state = 'move';
+    this.crouched = false;
+    this.speed = 0;
     this.alive = false;       // until the first pose arrives
     this.hp = this.maxHp = 100;
     this.onHurt = onHurt;
@@ -28,6 +30,8 @@ export class RemoteBody {
     this.pos.copy(pose.pos);
     this.facing = pose.facing;
     this.state = pose.state;
+    this.crouched = pose.crouched;
+    this.speed = pose.speed;
     this.alive = pose.state !== 'dead' && !!this.level;
   }
 

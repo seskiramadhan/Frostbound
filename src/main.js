@@ -25,6 +25,8 @@ import { Inventory, ITEMS } from './systems/inventory.js';
 import { Skills, applyStats } from './systems/skills.js';
 import { Shouts } from './systems/shouts.js';
 import { Projectiles } from './systems/projectiles.js';
+import { Magic } from './systems/magic.js';
+import { Stealth, witness } from './systems/stealth.js';
 import { Quests } from './systems/quests.js';
 import { loadSave, writeSave, clearSave } from './systems/save.js';
 import { ThirdPersonCamera } from './camera.js';
@@ -92,6 +94,15 @@ const WE = CONFIG.worldEater;
 const worldEater = entities.add(new Dragon(scene, summit, events, fx, entities, { scale: WE.scale, colors: WE.colors }));
 const chests = Object.values(dungeons).flatMap(d => d.chests.map(c => new Chest(scene, d, c.pos, c.lootKey, Math.PI)));
 const projectiles = new Projectiles(scene, entities, combat);
+const magic = new Magic(scene, entities, combat, fx);
+// Village strongboxes: stealing (see systems/stealth.js witness)
+const ST = CONFIG.steal;
+const strongboxes = ST.boxes.map(([lootKey, owner, x, z, facing]) => {
+  const c = new Chest(scene, valley, new THREE.Vector3(x, valley.heightAt(x, z), z), lootKey, facing);
+  c.key = `valley.${lootKey}`;
+  c.owner = owner;
+  return c;
+});
 const tpCam = new ThirdPersonCamera(camera, valley);
 tpCam.yaw = player.facing + Math.PI; // start behind the player
 
@@ -99,6 +110,7 @@ const inventory = new Inventory(events);
 const skills = new Skills(events, player);
 const shouts = new Shouts(events, entities, combat, fx);
 const npcs = VILLAGERS.map(def => new Npc(scene, valley, { ...def, spots: village.spots[def.id] }));
+const stealth = new Stealth(player, creatures, skills, () => session.role === 'guest');
 const visited = {};
 const flags = {};        // story switches set in conversations (metJarl, reportedDen, ...)
 const world = {
@@ -124,7 +136,7 @@ const SOUND_LABEL = { all: '♪ On', sfx: '♪ FX only', off: '♪ Off' };
 $('menu-sound').textContent = SOUND_LABEL[audio.pref];
 $('menu-sound').addEventListener('click', () => { $('menu-sound').textContent = SOUND_LABEL[audio.cyclePref()]; });
 const input = new Input(renderer.domElement, $('joy'), $('joy-knob'), {
-  jump: $('btn-jump'), interact: $('btn-interact'), menu: $('btn-bag'), shout: $('btn-shout'), bow: $('btn-bow'),
+  jump: $('btn-jump'), interact: $('btn-interact'), menu: $('btn-bag'), shout: $('btn-shout'), bow: $('btn-bow'), crouch: $('btn-crouch'),
 });
 
 // ---- Travel between levels ----
@@ -159,6 +171,28 @@ function openChest(chest) {
   const loot = chest.tier ? { items: tl.items, gold: tl.goldPerTier * chest.tier } : CONFIG.loot[chest.lootKey];
   for (const [id, n] of Object.entries(loot.items)) inventory.add(id, n);
   if (loot.gold) inventory.addGold(loot.gold);
+  save();
+}
+
+// Take from a villager's strongbox: fined if someone sees you, else the loot is yours.
+function steal(box) {
+  const seen = witness(npcs, player);
+  if (seen) {
+    const fine = Math.min(ST.fine, inventory.gold);
+    if (fine) inventory.spend(fine);
+    hud.announce(`${seen.name} caught you stealing!`, fine ? `You pay a ${fine} gold fine.` : 'You have no gold to pay the fine.');
+    audio.play('block');
+    save();
+    return;
+  }
+  box.open();
+  box.stolenAt = Date.now();
+  audio.play('chest');
+  const loot = CONFIG.loot[box.lootKey];
+  for (const [id, n] of Object.entries(loot.items)) inventory.add(id, n);
+  if (loot.gold) inventory.addGold(loot.gold);
+  skills.addXp('sneak', CONFIG.skills.sneak.xpPerSteal);
+  hud.toast('Stolen, and nobody saw.');
   save();
 }
 
@@ -197,6 +231,8 @@ const interactables = [
   { level: summit, pos: summit.exit, label: 'Descend the mountain',
     use: () => travel(valley, entrances.summit.outside, entrances.summit.facing) },
   ...chests.map(c => ({ level: c.level, pos: c.pos, label: 'Open chest', enabled: () => !c.opened, use: () => openChest(c) })),
+  ...strongboxes.map(b => ({ level: valley, pos: b.pos, label: `Steal from ${npcs.find(n => n.id === b.owner).name}'s strongbox`,
+    enabled: () => !b.opened, use: () => steal(b) })),
   ...npcs.map(n => ({ level: valley, pos: n.pos, label: `Talk to ${n.name}`, use: () => openDialog(n) })),
 ];
 
@@ -213,7 +249,8 @@ function nearestInteractable() {
 // ---- Bow aiming: auto-aim at the best enemy near the camera direction (with lead on fast flyers) ----
 const BW = CONFIG.bow;
 const aimFrom = new THREE.Vector3(), aimAt = new THREE.Vector3(), camDir = new THREE.Vector3();
-events.on('shootArrow', ({ shooter, power, damage }) => {
+// Sets aimFrom/aimAt for a shot from `shooter` travelling at `speed` m/s.
+function aim(shooter, speed) {
   const f = shooter.facing;
   aimFrom.set(shooter.pos.x + Math.sin(f) * 0.5, shooter.pos.y + 1.45, shooter.pos.z + Math.cos(f) * 0.5);
   camera.getWorldDirection(camDir);
@@ -231,12 +268,19 @@ events.on('shootArrow', ({ shooter, power, damage }) => {
   }
   if (best) {
     aimAt.set(best.pos.x, best.pos.y + (best.aimHeight ?? 0.8), best.pos.z);
-    const t = aimFrom.distanceTo(aimAt) / (BW.speed * (0.55 + 0.45 * power));
+    const t = aimFrom.distanceTo(aimAt) / speed;
     aimAt.addScaledVector(best.vel, t * (best.flying ? 1 : 0.5));   // lead moving targets
   } else {
     aimAt.copy(camera.position).addScaledVector(camDir, 60);
   }
+}
+events.on('shootArrow', ({ shooter, power, damage }) => {
+  aim(shooter, BW.speed * (0.55 + 0.45 * power));
   projectiles.fire(shooter, aimFrom, aimAt, power, damage);
+});
+events.on('castBolt', ({ caster, damage }) => {
+  aim(caster, CONFIG.magic.firebolt.speed);
+  magic.fire(caster, aimFrom, aimAt, damage);
 });
 
 // ---- Feedback ----
@@ -266,12 +310,24 @@ events.on('questStarted', ({ name, text }) => { hud.announce(`Quest started: ${n
 events.on('questStep', ({ text }) => { hud.toast(`New objective: ${text}`); save(); });
 events.on('questDone', ({ name }) => {
   hud.announce(`Quest completed: ${name}`);
-  if (quests.isDone('dragonRising')) hud.announce('More of the story awaits', 'The tale continues in a future update.');
   save();
 });
 events.on('shoutLearned', ({ def }) => hud.announce(`Word of Power: ${def.word}`, `${def.name}. ${IS_TOUCH ? 'Tap the shout button' : 'Press Q'} to use it.`));
 events.on('shout', ({ id }) => tpCam.shake(id === 'slowTime' ? 0.15 : 0.35));
-events.on('bowToggled', ({ bowMode }) => hud.toast(bowMode ? 'Bow drawn: hold to aim, release to shoot' : 'Sword drawn'));
+events.on('bowToggled', ({ bowMode, spellMode }) => hud.toast(bowMode ? 'Bow drawn: hold to aim, release to shoot'
+  : spellMode ? `Fire in hand: ${IS_TOUCH ? 'tap' : 'click'} for Firebolt, hold for Flames` : 'Sword drawn'));
+events.on('sneakAttack', ({ attacker, mul }) => { if (attacker === player) hud.toast(`Sneak attack for ${mul}x damage!`); });
+let noMagickaAt = 0;
+events.on('noMagicka', () => { if (performance.now() - noMagickaAt > 1500) { noMagickaAt = performance.now(); hud.toast('Not enough magicka'); } });
+events.on('readTome', ({ spell }) => {
+  if (spell !== 'fire') return;
+  if (player.knowsFire) { hud.toast('You already know these spells.'); return; }
+  player.knowsFire = true;
+  applyStats(player, inventory, skills);
+  hud.announce('Spells learned: Firebolt, Flames', `Switch to fire with ${IS_TOUCH ? 'the weapon button' : 'B'}. ${IS_TOUCH ? 'Tap' : 'Click'} to throw, hold to burn.`);
+  audio.play('word');
+  save();
+});
 events.on('netPlayerJoined', ({ name }) => { hud.toast(`${name} joined the game`); if (menu.open) menu.render(); });
 events.on('netPlayerLeft', ({ name }) => { hud.toast(`${name} left the game`); if (menu.open) menu.render(); });
 events.on('netJoined', () => { guestWorld = worldJSON(); });
@@ -309,6 +365,8 @@ events.on('damage', ({ target, source }) => {
 });
 events.on('blocked', ({ target }) => audio.play('block', target.pos));
 events.on('shootArrow', () => audio.play('bow'));
+events.on('castBolt', () => audio.play('firebolt'));
+events.on('sneakAttack', () => audio.play('thud'));
 events.on('shout', ({ id }) => audio.play(id));
 events.on('dragonDowned', ({ dragon: d }) => audio.play('thud', d?.pos));
 events.on('skillUp', () => audio.play('levelUp'));
@@ -420,7 +478,7 @@ function maybeRefillDungeon(d) {
 
 function newGamePlus() {
   resetting = true;
-  writeSave({ ng: ng + 1, hunts: huntsWon, skills: skills.toJSON(), shouts: { known: [], selected: null } });
+  writeSave({ ng: ng + 1, hunts: huntsWon, skills: skills.toJSON(), spells: player.knowsFire ? ['fire'] : [], shouts: { known: [], selected: null } });
   hud.fade(() => location.reload(), 0.8);
 }
 
@@ -444,6 +502,7 @@ function worldJSON() {
     chests: chests.filter(c => c.opened).map(c => c.key),
     chestTiers: Object.fromEntries(chests.filter(c => c.tier).map(c => [c.key, c.tier])),
     dead: creatures.filter(w => w.key && !w.alive).map(w => w.key),
+    stolen: Object.fromEntries(strongboxes.filter(b => b.opened).map(b => [b.key, b.stolenAt ?? Date.now()])),
     dragonDead: dragon.state === 'dead',
     worldEaterDead: worldEater.state === 'dead',
     tiers, refills,
@@ -456,7 +515,9 @@ function save() {
     ng,
     hunts: huntsWon,
     flags,
-    player: { level: player.level.key ?? 'valley', pos: player.pos.toArray(), facing: player.facing, hp: player.hp, bowMode: player.bowMode },
+    player: { level: player.level.key ?? 'valley', pos: player.pos.toArray(), facing: player.facing, hp: player.hp,
+      bowMode: player.bowMode, spellMode: player.spellMode },
+    spells: player.knowsFire ? ['fire'] : [],
     inventory: inventory.toJSON(),
     skills: skills.toJSON(),
     shouts: shouts.toJSON(),
@@ -467,6 +528,7 @@ function save() {
 
 function applySave(s) {
   inventory.load(s.inventory);
+  player.knowsFire = !!s.spells?.includes('fire');
   skills.load(s.skills);
   shouts.load(s.shouts);
   huntsWon = Math.max(0, s.hunts | 0);
@@ -479,6 +541,10 @@ function applySave(s) {
   Object.assign(visited, s.world?.visited);
   Object.assign(flags, s.flags);
   for (const key of s.world?.chests ?? []) world.chest(key)?.open(true);
+  for (const [key, t] of Object.entries(s.world?.stolen ?? {})) {
+    const b = strongboxes.find(x => x.key === key);
+    if (b) { b.open(true); b.stolenAt = +t || Date.now(); }
+  }
   for (const key of s.world?.dead ?? []) creatures.find(w => w.key === key)?.removeForGood();
   if (s.world?.dragonDead) dragon.setDead();
   if (s.world?.worldEaterDead) worldEater.setDead();
@@ -487,6 +553,7 @@ function applySave(s) {
   player.moveTo(level, new THREE.Vector3(x, 0, z), s.player?.facing ?? Math.PI);
   player.hp = Math.max(1, Math.min(player.maxHp, s.player?.hp ?? player.maxHp));
   player.bowMode = !!s.player?.bowMode;
+  player.spellMode = !player.bowMode && player.knowsFire && !!s.player?.spellMode;
   enterLevel(level, player.facing);
 }
 
@@ -496,9 +563,8 @@ for (const d of Object.values(dungeons)) {
   if (d.wordWall) d.setWordLearned(shouts.known.has(d.wordWall.shout));
   if (d.secretWall) d.setSecretState(!!flags.victory, shouts.known.has(d.secretWall.shout));
 }
-if (ng) hud.setStartText(true, `New Game+ ${ng}`);
 applyStats(player, inventory, skills);
-hud.setStartText(!!saved);
+hud.setStartText(!!saved, ng ? `New Game+ ${ng}` : '');
 const joinCode = new URLSearchParams(location.search).get('join');   // invite link: ?join=CODE
 if (joinCode) $('cta').textContent = `${IS_TOUCH ? 'Tap' : 'Click'} to join room ${joinCode.toUpperCase()}`;
 
@@ -614,7 +680,7 @@ addEventListener('pagehide', save);
 // ---- Fixed-step logic ----
 let saveTimer = 0, dragonTimer = 0;
 const SPAWN = new THREE.Vector3(CONFIG.player.spawn[0], 0, CONFIG.player.spawn[1]);
-const IDLE_CMD = { move: { x: 0, y: 0 }, run: false, attack: false, block: false, draw: false, jump: false, interact: false, shout: false, toggleBow: false };
+const IDLE_CMD = { move: { x: 0, y: 0 }, run: false, attack: false, block: false, draw: false, jump: false, interact: false, shout: false, toggleBow: false, crouch: false, cycleShout: false };
 function tick(dt, controls) {
   const cmd = controls ? input.update() : IDLE_CMD;   // co-op: the world keeps going while you're in a menu
   if (player.canRespawn && cmd.attack) {
@@ -629,6 +695,10 @@ function tick(dt, controls) {
   hud.setPrompt(near?.label ?? null);
   if (near && cmd.interact) near.use();
 
+  if (cmd.cycleShout && shouts.cycle()) {
+    const def = CONFIG.shouts[shouts.selected];
+    hud.toast(`Shout: ${def.word} · ${def.name}`);
+  }
   if (cmd.shout && player.canShout && shouts.ready) {
     player.startShout(tpCam.yaw + Math.PI);
     shouts.use(player);
@@ -644,7 +714,12 @@ function tick(dt, controls) {
     worldEater.tick(edt);
   }
   projectiles.update(dt);
+  magic.update(dt, [player]);
   shouts.update(dt);
+  stealth.update(dt);
+  for (const b of strongboxes) {   // strongboxes fill up again after a while
+    if (b.opened && Date.now() - (b.stolenAt ?? 0) > ST.refill * 1000) { b.opened = false; b.openT = 0; }
+  }
   separateBodies(entities);
 
   // Quest flow: Dragon Rising follows The Howling Den; the dragon comes when you're back outside
@@ -686,6 +761,7 @@ function updateSound(dt) {
     tellState.set(c, c.state);
   }
   fireTimer -= dt;
+  if (player.state === 'flames' && fireTimer <= 0) { audio.play('fire'); fireTimer = 0.28; }
   for (const d of [dragon, huntDragon, worldEater]) {
     if (d.breathing > 0 && d.alive && fireTimer <= 0 && player.level === d.level) { audio.play('fire', d.pos); fireTimer = 0.28; }
   }
@@ -697,6 +773,7 @@ function updateSound(dt) {
 const STEP = 1 / CONFIG.loop.tickRate;
 const renderPos = new THREE.Vector3();
 const TORCH = CONFIG.dungeon.torch;
+const culled = [];
 let acc = 0, last = performance.now();
 
 function frame(now) {
@@ -728,6 +805,11 @@ function frame(now) {
   huntDragon.render(alpha);
   worldEater.render(alpha);
   for (const c of chests) c.update(dt);
+  for (const b of strongboxes) b.update(dt);
+  for (const p of session.players.values()) {   // co-op players holding Flames
+    const r = p.remote, root = r.model.root;
+    if (playing && root.visible && r.pose?.state === 'flames' && Math.random() < 0.5) magic.flameFx(root.position, root.rotation.y);
+  }
   for (const n of npcs) n.update(dt, player, dialog.npc === n);
   for (const d of Object.values(dungeons)) d.update(dt);
   if (playing) fx.update(dt * (shouts.timeScale < 1 ? 0.6 : 1));
@@ -755,6 +837,7 @@ function frame(now) {
   hud.setMarker(mark, camera, player.pos);
   hud.setShout(shouts);
   hud.setBow(player);
+  hud.setStealth(player, stealth);
   hud.setSlow(shouts.slowLeft > 0 || (session.role === 'guest' && session.mirror.slow));
   if (session.role === 'guest') {
     for (const d of [dragon, huntDragon, worldEater]) if (d.state === 'soul' && Math.random() < 0.5) fx.soul({ x: d.pos.x, y: d.pos.y + 2, z: d.pos.z }, player.pos, 2);
@@ -764,7 +847,15 @@ function frame(now) {
 
   updateSound(dt);
   hud.frame(dt, player);
+  // Creatures beyond the fog can't be seen anyway: skip their draw calls this frame
+  const fogFar2 = (scene.fog.far + 4) ** 2;
+  for (const c of creatures) {
+    const { root, shadow } = c.model;
+    if (root.visible && root.position.distanceToSquared(camera.position) > fogFar2) { root.visible = shadow.visible = false; culled.push(c); }
+  }
   renderer.render(scene, camera);
+  for (const c of culled) c.model.root.visible = c.model.shadow.visible = true;
+  culled.length = 0;
 }
 requestAnimationFrame(frame);
 
@@ -777,8 +868,8 @@ addEventListener('resize', () => {
 // Debug handle for testing in the console
 window.frostbound = {
   player, creatures, dragon, huntDragon, worldEater, summit, entities, npcs, dialog, flags, village, audio, events, inventory, skills, shouts, quests, chests, dungeons, den, barrow,
-  valley, entrances, interactables, projectiles, fx, save, menu, session, coopPanel,
-  tpCam,
+  valley, entrances, interactables, projectiles, magic, stealth, strongboxes, fx, save, menu, session, coopPanel,
+  tpCam, renderer,
   go: (level, at, facing = 0) => { player.moveTo(level, at, facing); enterLevel(level, facing); },
   dragonAttack: () => startHunt(true), get ng() { return ng; }, tiers, refills,
 };

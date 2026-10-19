@@ -5,6 +5,19 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { mulberry32 } from './noise.js';
+import { mergeColored } from './props.js';
+
+// Bake parts into one mesh (one draw call): [{ geo, p: [x, y, z], r?: [x, y, z], s?: [x, y, z] }].
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
+function baked(list, mat) {
+  const parts = list.map(({ geo, p, r = [0, 0, 0], s = [1, 1, 1] }) => {
+    geo.applyMatrix4(_m.compose(new THREE.Vector3(...p), _q.setFromEuler(_e.set(...r)), new THREE.Vector3(...s)));
+    return { geo, color: 0xffffff };
+  });
+  const mesh = new THREE.Mesh(mergeColored(parts), mat);
+  mesh.matrixAutoUpdate = false;
+  return mesh;
+}
 
 const D = CONFIG.dungeon;
 
@@ -128,19 +141,17 @@ export class Dungeon {
     g.rotation.y = w.facing;
     const stone = new THREE.MeshLambertMaterial({ color: 0x7a7d80, flatShading: true });
     this[matKey] = new THREE.MeshBasicMaterial({ color: matKey === 'secretMat' ? 0x1e2830 : 0x9fd8ff });
+    const panels = [], runes = [];
     for (let k = -2; k <= 2; k++) {                       // 5 panels on a gentle curve
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(1.0, 3.4 - Math.abs(k) * 0.35, 0.45), stone);
-      panel.position.set(k * 0.95, (3.4 - Math.abs(k) * 0.35) / 2, Math.abs(k) * 0.28);
-      panel.rotation.y = -k * 0.22;
-      g.add(panel);
+      const h = 3.4 - Math.abs(k) * 0.35;
+      panels.push({ geo: new THREE.BoxGeometry(1.0, h, 0.45), p: [k * 0.95, h / 2, Math.abs(k) * 0.28], r: [0, -k * 0.22, 0] });
       const rand = mulberry32(77 + k);
       for (let r = 0; r < 4; r++) {                       // claw-mark runes
-        const rune = new THREE.Mesh(new THREE.BoxGeometry(0.08 + rand() * 0.25, 0.08 + rand() * 0.3, 0.05), this[matKey]);
-        rune.position.set(k * 0.95 + (rand() - 0.5) * 0.5, 0.7 + r * 0.6, Math.abs(k) * 0.28 + 0.24);
-        rune.rotation.set(0, -k * 0.22, (rand() - 0.5) * 1.2);
-        g.add(rune);
+        const geo = new THREE.BoxGeometry(0.08 + rand() * 0.25, 0.08 + rand() * 0.3, 0.05);
+        runes.push({ geo, p: [k * 0.95 + (rand() - 0.5) * 0.5, 0.7 + r * 0.6, Math.abs(k) * 0.28 + 0.24], r: [0, -k * 0.22, (rand() - 0.5) * 1.2] });
       }
     }
+    g.add(baked(panels, stone), baked(runes, this[matKey]));   // 2 draw calls per wall
     for (const k of [-1.8, 0, 1.8]) {
       const c = Math.cos(w.facing), sn = Math.sin(w.facing);
       this.colliders.push({ x: w.pos.x + k * c, z: w.pos.z - k * sn, r: 0.9 });
@@ -277,25 +288,25 @@ export class Dungeon {
     return mesh;
   }
 
-  // Stone fire bowls with flickering flames (flames animated in update()).
+  // Stone fire bowls (one merged mesh) with flickering flames (animated in update()).
   #buildBraziers() {
     const g = new THREE.Group();
     const stone = new THREE.MeshLambertMaterial({ color: 0x55504a, flatShading: true });
     const flameMat = new THREE.MeshBasicMaterial({ color: 0xffa040 });
     const coreMat = new THREE.MeshBasicMaterial({ color: 0xfff0a0 });
     this.flames = [];
+    const stones = [];
     for (const b of this.braziers) {
-      const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.3, 0.9, 6), stone);
-      stand.position.set(b.x, 0.45, b.z);
-      const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.25, 0.3, 7), stone);
-      bowl.position.set(b.x, 1.0, b.z);
+      stones.push({ geo: new THREE.CylinderGeometry(0.18, 0.3, 0.9, 6), p: [b.x, 0.45, b.z] },
+        { geo: new THREE.CylinderGeometry(0.5, 0.25, 0.3, 7), p: [b.x, 1.0, b.z] });
       const flame = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.9, 5), flameMat);
       flame.position.set(b.x, 1.55, b.z);
       const core = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.5, 5), coreMat);
       core.position.set(b.x, 1.4, b.z);
-      g.add(stand, bowl, flame, core);
+      g.add(flame, core);
       this.flames.push({ flame, core, phase: Math.random() * 10 });
     }
+    if (stones.length) g.add(baked(stones, stone));
     return g;
   }
 
@@ -350,11 +361,9 @@ export function buildEntrance(terrain, { distance, angle0, style, at }) {
 function buildCave(group) {
   const rockMat = new THREE.MeshLambertMaterial({ color: 0x74777d, flatShading: true });
   const snowMat = new THREE.MeshLambertMaterial({ color: 0xeef2f6, flatShading: true });
+  const rocks = [], snows = [];
   const rock = (x, y, z, sx_, sy, sz_, mat = rockMat) => {
-    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(1, 0), mat);
-    m.position.set(x, y, z); m.scale.set(sx_, sy, sz_);
-    m.rotation.set(x * 1.3, z * 0.7, y * 0.9);
-    group.add(m);
+    (mat === snowMat ? snows : rocks).push({ geo: new THREE.DodecahedronGeometry(1, 0), p: [x, y, z], r: [x * 1.3, z * 0.7, y * 0.9], s: [sx_, sy, sz_] });
   };
   rock(-2.6, 1.6, -0.5, 1.6, 2.4, 1.8);      // left pillar
   rock(2.6, 1.6, -0.5, 1.6, 2.5, 1.8);       // right pillar
@@ -363,6 +372,7 @@ function buildCave(group) {
   rock(-4.3, 0.8, -1.5, 1.4, 1.4, 1.4);
   rock(4.2, 0.9, -1.6, 1.5, 1.5, 1.3);
   rock(0, 2.5, -2.6, 4.5, 3.2, 1.6);         // back wall behind the mouth
+  group.add(baked(rocks, rockMat), baked(snows, snowMat));
 
   const mouth = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), new THREE.MeshBasicMaterial({ color: 0x050403 }));
   mouth.position.set(0, 1.7, -0.9);
@@ -376,7 +386,8 @@ function buildPath(group) {
   const rock = new THREE.MeshLambertMaterial({ color: 0x6e7177, flatShading: true });
   const snow = new THREE.MeshLambertMaterial({ color: 0xeef2f6, flatShading: true });
   const banner = new THREE.MeshLambertMaterial({ color: 0x7a2a22, flatShading: true });
-  const add = (geo, mat, x, y, z, ry = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.y = ry; group.add(m); };
+  const byMat = new Map();
+  const add = (geo, mat, x, y, z, ry = 0) => { if (!byMat.has(mat)) byMat.set(mat, []); byMat.get(mat).push({ geo, p: [x, y, z], r: [0, ry, 0] }); };
   for (let k = 0; k < 6; k++) add(new THREE.BoxGeometry(2.6, 0.35, 0.8), stone, 0, 0.17 + k * 0.35, 0.6 - k * 0.75);   // steps up
   add(new THREE.BoxGeometry(3.4, 4.5, 2.5), rock, -2.9, 2.0, -2.4, 0.2);
   add(new THREE.BoxGeometry(3.4, 5.5, 2.5), rock, 2.9, 2.5, -2.6, -0.2);
@@ -387,6 +398,7 @@ function buildPath(group) {
     add(new THREE.BoxGeometry(0.06, 1.4, 0.7), banner, sx, 2.6, 1.75);
   }
   for (let k = 0; k < 4; k++) add(new THREE.DodecahedronGeometry(0.55 - k * 0.1, 0), stone, 3.4, 0.45 + k * 0.8, 1.6, k);  // cairn
+  for (const [mat, list] of byMat) group.add(baked(list, mat));
   return [[-2.9, -2.4, 2.0], [2.9, -2.6, 2.0], [0, -5.2, 2.8], [3.4, 1.6, 0.6]];
 }
 
@@ -394,9 +406,8 @@ function buildRuin(group) {
   const stone = new THREE.MeshLambertMaterial({ color: 0x8a8d90, flatShading: true });
   const dark = new THREE.MeshLambertMaterial({ color: 0x5e6164, flatShading: true });
   const snow = new THREE.MeshLambertMaterial({ color: 0xeef2f6, flatShading: true });
-  const add = (geo, mat, x, y, z, ry = 0, rz = 0) => {
-    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(0, ry, rz); group.add(m);
-  };
+  const byMat = new Map();
+  const add = (geo, mat, x, y, z, ry = 0, rz = 0) => { if (!byMat.has(mat)) byMat.set(mat, []); byMat.get(mat).push({ geo, p: [x, y, z], r: [0, ry, rz] }); };
   add(new THREE.BoxGeometry(1.1, 5, 1.1), stone, -2.1, 2.5, 0);            // door pillars
   add(new THREE.BoxGeometry(1.1, 5, 1.1), stone, 2.1, 2.5, 0);
   add(new THREE.BoxGeometry(6, 1, 1.5), stone, 0, 5.4, 0);                 // lintel
@@ -408,5 +419,6 @@ function buildRuin(group) {
   add(new THREE.BoxGeometry(0.9, 3.6, 0.7), stone, -5.2, 1.6, 1.5, 0.3, 0.08);
   add(new THREE.BoxGeometry(0.9, 3.0, 0.7), stone, 5.4, 1.3, 1.2, -0.25, -0.1);
   add(new THREE.BoxGeometry(0.9, 0.8, 3.2), stone, 6.6, 0.4, 3.6, 0.6);
+  for (const [mat, list] of byMat) group.add(baked(list, mat));
   return [[-2.1, 0, 0.9], [2.1, 0, 0.9], [0, -1.8, 2.6], [-2.4, -1.8, 2.2], [2.4, -1.8, 2.2], [-5.2, 1.5, 0.7], [5.4, 1.2, 0.7], [6.6, 3.6, 1.0]];
 }

@@ -1,9 +1,10 @@
 // Resolves 'attack' events into hits: distance + swing arc, frontal block.
-// Emits 'damage', 'blocked' and 'death' (each with `source`: melee | arrow | shout).
+// Emits 'damage', 'blocked' and 'death' (each with `source`: melee | arrow | shout | fire),
+// and 'sneakAttack' when a crouching player hits an enemy that hasn't noticed them.
 // Also 'areaAttack': everything hostile within a radius of a point. In co-op only the host runs this.
 import { CONFIG } from '../config.js';
 
-const B = CONFIG.combat.block;
+const B = CONFIG.combat.block, SN = CONFIG.sneak;
 
 // Is `b` within `reach` of `a` and inside a's facing arc (half-angle, radians)?
 export function inArc(a, b, reach, arc) {
@@ -43,6 +44,12 @@ export class Combat {
 
   applyHit(attacker, target, damage, source = 'melee') {
     const ev = this.events;
+    // Sneak attack (a co-op guest already multiplied its own hit before sending it)
+    if (attacker.crouched && !attacker.remote && target.unaware && SN.attackMul[source]) {
+      const mul = SN.attackMul[source] * (attacker.sneakAttackMul ?? 1);
+      damage *= mul;
+      ev.emit('sneakAttack', { attacker, target, mul });
+    }
     if (this.forwardHit && target.team !== 'player') {          // co-op guest: the host decides
       this.forwardHit(target, damage, source);
       ev.emit('damage', { target, attacker, amount: damage, source, forwarded: true });

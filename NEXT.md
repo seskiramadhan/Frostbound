@@ -1,7 +1,7 @@
 # NEXT.md — where Frostbound stands and what's pending
 
 Read this first in a new session, then `CLAUDE.md` for the rules.
-Last updated: 2026-10-19 (round 3 of 3 built on branch `round3`, awaiting test/merge).
+Last updated: 2026-10-19 (round 3 on branch `round3` = PR #12; round 4 on branch `round4`, stacked on it).
 
 ## Live now (merged to `master`, deployed to GitHub Pages)
 https://seskiramadhan.github.io/Frostbound/
@@ -18,7 +18,8 @@ https://seskiramadhan.github.io/Frostbound/
 | Co-op N3 | Dragon hunts: host starts from the Co-op tab after Dragon Rising; tougher each level; gold for everyone | #9 |
 | Phase 5a+5b | Frosthollow village, 5 NPCs + dialogue, merchant, inn, Jarl-led main story, 4 side quests, quest log | #10 |
 | Music folders | `audio/music/` (public CC0) + git-ignored `audio/music/local/` | #11 |
-| Phase 5c+5d | Audio (SFX + music), World-Eater on the summit, ending, post-game, Ice Form, New Game+ | round-3 PR (branch `round3`) |
+| Phase 5c+5d | Audio (SFX + music), World-Eater on the summit, ending, post-game, Ice Form, New Game+ | #12 (branch `round3`) |
+| Round 4 | Sneak + stealing, fire magic + Magicka, hold-to-switch shouts, fewer draw calls | round-4 PR (branch `round4`, stacked on #12) |
 
 **Story today (with round 2):** start in Frosthollow → The Jarl's Summons (talk to Jarl Hrolf) →
 The Howling Den (den, alpha, treasure, report to Jarl) → Dragon Rising (barrow, FUS word wall, dragon,
@@ -31,6 +32,24 @@ fights harder), then victory: ending card, sunny valley, villagers say "Dragonbo
 `postGame.dungeonRespawn` s, a hidden word wall in Bleakrock Barrow teaches **Ice Form (IIZ)**
 (freezes enemies, knocks dragons down), and the Jarl offers **New Game+** (keeps skills, enemies
 +50% HP / +30% damage per NG level).
+
+**Round 4 (built, awaiting test):**
+- **Sneak:** Sneak button / C crouches (slower, no running). Enemies notice a crouching player
+  gradually (`creature.notice` 0..1: closer, in front, moving = faster; behind, still, dim dungeon,
+  Sneak skill = slower). Stealth eye above the bars: Hidden / Caution / Detected.
+  Sneak attacks on unaware enemies (state wander/return): sword x3, arrow x2, fire x1.5 (perk doubles).
+- **Stealing:** 3 village strongboxes (Jarl, Ingrid, Bera). Anyone within 14 m sees a standing thief;
+  a crouching thief only if a villager within 6 m is facing you. Caught = 40 gold fine. Boxes refill
+  after 15 min. Sneak XP from creeping near unaware enemies, sneak attacks and stealing.
+- **Fire magic:** "Spell Tome: Fire" (Ingrid, 80 gold) teaches Firebolt (tap) + Flames (hold).
+  Weapon button / B cycles Sword -> Bow -> Fire. Magicka bar (blue) appears once you know fire.
+  Destruction skill (perk: half cost). Skills tab now has 5 skills.
+- **Shouts:** hold the Shout button (or R) to switch shouts.
+- **Perf:** word walls, brazier stands and entrances merged (barrow 129 -> 69 draw calls, den 79 -> 60,
+  village 50 -> 42); creatures beyond the fog are skipped when drawing.
+- Fixes: New Game+ start text; removed the stale "More of the story awaits" announcement.
+- Co-op: protocol v5 (pose flags 4 = crouched, 8 = spell mode). Guests' sneak attacks are multiplied
+  on the guest; the host doesn't multiply again. Other players' Flames are drawn; their firebolts are not.
 
 ## Plan agreed with the user: 3 rounds, user tests after each
 1. **Round 1 (done, merged):** announcement fix + co-op N3 dragon hunts.
@@ -50,8 +69,8 @@ fights harder), then victory: ending card, sunny valley, villagers say "Dragonbo
 - [ ] Co-op on two real phones: N1 worked on the user's devices (room MCXWP, 2/4). N2 (shared fights) not yet tried for real.
 - [ ] Co-op on **mobile data** (4G/5G) — untested. Some carriers block WebRTC; would need a TURN relay (free tiers exist, e.g. Metered/OpenRelay) added to `CONFIG.net.iceServers`.
 
-### 2. Small UX fixes already discussed (not done)
-- [ ] **Quick shout switching:** offered "hold the shout button 0.5 s to cycle shouts" (phone) and an **R** key (desktop). User asked how to switch; not yet confirmed they want it — today it's Bag → Shouts tab.
+### 2. Small UX fixes already discussed
+- [x] **Quick shout switching:** hold Shout (phone) / R (desktop). Round 4.
 - [ ] Standable rocks (rocks are only circle colliders, no top) + maybe a slightly higher jump. User said "okay for now".
 
 ### 3. Co-op N3 — done (round 1)
@@ -67,8 +86,6 @@ HP +30%/level, damage +15%/level, names from `CONFIG.hunt.names`; everyone prese
 - ✅ (round 3, audio part) **5d Audio + polish:** procedural Web Audio (`src/audio.js`): sword, wolves, dragon roar, shouts, wind, footsteps. Optional day/night.
 
 ### 5. Not in the game yet (from CLAUDE.md core mechanics)
-- Crouch / Sneak skill / stealth meter / sneak attacks / stealing
-- Magic: Destruction (fire) skill + Magicka bar
 - Day/night cycle (optional)
 - Village is single-player per device in co-op: NPCs, quests and trades are local to each player
 
@@ -105,5 +122,5 @@ HP +30%/level, damage +15%/level, names from `CONFIG.hunt.names`; everyone prese
 
 ## Open questions for the user
 - Quick shout switching: want it? (see 2)
-- After round 3: what next? Candidates: Sneak/stealth, fire magic + Magicka, day/night,
-  quick shout switching, co-op N4 relay, balance from playtesting.
+- After round 4: what next? Candidates: day/night, standable rocks, co-op N4 relay,
+  balance from playtesting (sneak detection speed, fire damage, World-Eater).
