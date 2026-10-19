@@ -44,6 +44,8 @@ export class Hud {
     this.target = null;
     this.targetTime = 0;
     this.noticeTime = 0;
+    this.noticeGap = 0;
+    this.noticeQueue = [];
     this.lastPrompt = null;
     this.frames = 0;
     this.acc = 0;
@@ -87,10 +89,18 @@ export class Hud {
   }
 
   // Big centred message (skill up, quest done).
+  // Big centred messages queue up so one never hides another.
   announce(title, sub = '') {
+    this.noticeQueue.push([title, sub]);
+    if (this.noticeTime <= 0 && this.noticeGap <= 0) this.#nextNotice();
+  }
+
+  #nextNotice() {
+    const next = this.noticeQueue.shift();
+    if (!next) return;
     this.notice.innerHTML = '';
-    const t = document.createElement('div'); t.className = 'n-title'; t.textContent = title;
-    const s = document.createElement('div'); s.className = 'n-sub'; s.textContent = sub;
+    const t = document.createElement('div'); t.className = 'n-title'; t.textContent = next[0];
+    const s = document.createElement('div'); s.className = 'n-sub'; s.textContent = next[1];
     this.notice.append(t, s);
     this.notice.classList.add('on');
     this.noticeTime = 3;
@@ -185,7 +195,8 @@ export class Hud {
     }
     this.targetWrap.style.opacity = this.target && this.bossEl.style.display === 'none' ? 1 : 0;
 
-    if (this.noticeTime > 0 && (this.noticeTime -= dt) <= 0) this.notice.classList.remove('on');
+    if (this.noticeTime > 0 && (this.noticeTime -= dt) <= 0) { this.notice.classList.remove('on'); this.noticeGap = 0.6; }
+    else if (this.noticeGap > 0 && (this.noticeGap -= dt) <= 0) this.#nextNotice();
 
     if (player.canRespawn && !this.deathCta.textContent) {
       this.deathCta.textContent = IS_TOUCH ? 'Tap the right side to rise again' : 'Click to rise again';
