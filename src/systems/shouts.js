@@ -48,7 +48,7 @@ export class Shouts {
   use(player) {
     if (!this.ready || !player.alive) return false;
     const id = this.selected, def = SH[id];
-    this.cooldown = this.cooldownMax = def.cooldown;
+    this.cooldown = this.cooldownMax = def.cooldown * (this.cooldownMul ?? 1);   // Greybeards' blessing: < 1
     if (this.forward) { this.#fx(player, id, def); this.forward(id); }   // co-op guest: the host applies it
     else this.apply(player, id);
     this.events.emit('shout', { id, def });

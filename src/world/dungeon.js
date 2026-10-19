@@ -90,6 +90,41 @@ export const BLEAKROCK_BARROW = {
   ],
 };
 
+// The Horn of Jurgen Windcaller's tomb (The Way of the Voice). 'H' is the horn's pedestal.
+export const USTENGRAV = {
+  name: 'Ustengrav',
+  key: 'ustengrav',
+  origin: [1400, 0, 1000],
+  spawns: { d: 'draugr', D: 'draugrWight' },
+  chests: { c: 'ustengravHall' },
+  markers: { H: 'horn' },
+  palette: { floor: 0x4e5156, wall: 0x5f6368, ceiling: 0x3c3f43 },
+  roughness: 0.3,
+  map: [
+    '#####################',
+    '########.....########',
+    '########.X.S.########',
+    '########.....########',
+    '#########.t.#########',
+    '#########...#########',
+    '####.............####',
+    '####.t..d...d..t.####',
+    '####.............####',
+    '#######.......#######',
+    '#########...#########',
+    '#########...#########',
+    '#####.....d.....#####',
+    '#####.t.......t.#####',
+    '#####...c...d...#####',
+    '#######.......#######',
+    '#########...#########',
+    '#######...D...#######',
+    '######.t.....t.######',
+    '#######...H...#######',
+    '#####################',
+  ],
+};
+
 // Deterministic hash -> [-1, 1], so shared vertices get the same displacement.
 function hash3(x, y, z) {
   let h = Math.imul(Math.round(x * 10) | 0, 73856093) ^ Math.imul(Math.round(y * 10) | 0, 19349663) ^ Math.imul(Math.round(z * 10) | 0, 83492791);
@@ -115,6 +150,7 @@ export class Dungeon {
     this.wordWall = null;  // { pos, facing, shout }
     this.secretWall = null; // hidden 4th word wall (awakens after the World-Eater falls)
     this.braziers = [];
+    this.markers = {};     // named spots from def.markers (e.g. the horn's pedestal)
 
     for (let j = 0; j < this.rows; j++) {
       for (let i = 0; i < this.cols; i++) {
@@ -126,12 +162,27 @@ export class Dungeon {
         else if (ch === 'V') this.secretWall = { pos: p, ...def.secretWall };
         else if (ch === 't') { this.braziers.push(p); this.colliders.push({ x: p.x, z: p.z, r: 0.55 }); }
         else if (def.chests[ch]) this.chests.push({ pos: p, lootKey: def.chests[ch] });
+        else if (def.markers?.[ch]) this.markers[def.markers[ch]] = p;
       }
     }
     this.group = new THREE.Group();
     this.group.add(this.#buildCave(), this.#buildBraziers());
     if (this.wordWall) this.group.add(this.#buildWordWall(this.wordWall, 'runeMat'));
     if (this.secretWall) this.group.add(this.#buildWordWall(this.secretWall, 'secretMat'));
+    if (this.markers.horn) this.group.add(this.#buildPedestal(this.markers.horn));
+  }
+
+  // A carved stone pedestal with an empty cradle (the horn has been taken...).
+  #buildPedestal(p) {
+    const stone = new THREE.MeshLambertMaterial({ color: 0x8a8d90, flatShading: true });
+    this.colliders.push({ x: p.x, z: p.z, r: 0.7 });
+    return baked([
+      { geo: new THREE.BoxGeometry(1.1, 0.3, 1.1), p: [p.x, 0.15, p.z] },
+      { geo: new THREE.CylinderGeometry(0.3, 0.4, 1.1, 6), p: [p.x, 0.85, p.z] },
+      { geo: new THREE.BoxGeometry(0.9, 0.15, 0.5), p: [p.x, 1.45, p.z] },
+      { geo: new THREE.BoxGeometry(0.1, 0.3, 0.5), p: [p.x - 0.4, 1.65, p.z] },
+      { geo: new THREE.BoxGeometry(0.1, 0.3, 0.5), p: [p.x + 0.4, 1.65, p.z] },
+    ], stone);
   }
 
   // Curved stone slab carved with glowing runes. Colliders keep you from walking through it.

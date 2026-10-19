@@ -72,9 +72,12 @@ function jarl(c) {
     } else {
       o.push({ label: `I wish to begin anew (New Game+${c.ng ? ` ${c.ng + 1}` : ''})`, run: () => { c.confirmNg = true; return true; } });
     }
+  } else if (q.isActive('wayOfTheVoice')) {
+    text = 'You heard it too, that voice from the mountain: "Dovahkiin." The Greybeards of High Hrothgar have summoned you. '
+      + 'Their path climbs the mountain west of Bleakrock Barrow. Go. Few are ever called.';
   } else if (q.isActive('worldEater')) {
     text = 'The path up the peak starts east of the old barrow. The World-Eater waits at the summit. Strike true, Dragonborn.';
-  } else if (q.isDone('dragonRising')) {
+  } else if (q.isDone('wayOfTheVoice')) {     // fallback: the Greybeards normally send you on
     text = 'Dragonborn. The World-Eater stirs on the peak, and the sky darkens by the day.';
     o.push({ label: 'I\'m ready to face the World-Eater.', run: () => {
       q.start('worldEater');
@@ -118,6 +121,13 @@ function innkeeper(c) {
     o.push({ label: 'Any other trouble?', run: () => {
       q.start('silenceBarrow');
       c.done('Something walks in Bleakrock Barrow. A wight, the old folk say. Put it back in the ground and drinks are on me.'); return true;
+    } });
+  }
+  if (q.stepText('wayOfTheVoice') === 'Meet your mysterious friend at the Sleeping Bear') {
+    o.push({ label: 'I\'m looking for whoever left this note.', run: () => {
+      flags.hornGot = true; inv.remove('strangeNote'); inv.add('hornOfJurgen');
+      c.done('Shh, not so loud. I left that note. I had to know the Dragonborn was real, and that you weren\'t a trap. '
+        + 'Here\'s your horn; the Greybeards will want it. One day I\'ll tell you who I really am.'); return true;
     } });
   }
   if (q.stepText('silenceBarrow') === 'Tell Bera the barrow is quiet') {
@@ -180,10 +190,50 @@ function sven(c) {
   return { text, options: o };
 }
 
-const TALK = { jarl, merchant, innkeeper, hunter, sven };
+// Master Arngeir speaks for the Greybeards; the other masters stay silent.
+function arngeir(c) {
+  const { quests: q, flags, inventory: inv } = c;
+  const step = q.stepText('wayOfTheVoice'), o = [];
+  let text;
+  if (step === 'Speak with Master Arngeir') {
+    text = 'So. A Dragonborn appears, at the very hour the dragons return. We are the Greybeards. Few are called to High Hrothgar.';
+    o.push({ label: 'You summoned me.', run: () => {
+      flags.metGreybeards = true;
+      c.done('Then let us see whether you truly have the gift. Show us your Voice: shout, here in the courtyard.'); return true;
+    } });
+  } else if (step === 'Show the Greybeards your Voice') {
+    text = 'Use your Thu\'um. Shout, here in the courtyard, and let us hear the dragon in your voice.';
+  } else if (step === 'Retrieve the Horn of Jurgen Windcaller from Ustengrav') {
+    text = 'Your last trial: bring us the Horn of Jurgen Windcaller from his tomb, Ustengrav, east of the valley.';
+  } else if (step === 'Meet your mysterious friend at the Sleeping Bear') {
+    text = 'The horn was taken before you? Then follow the trail, Dovahkiin. The horn will find its way here.';
+  } else if (step === 'Bring the Horn to the Greybeards') {
+    text = 'You have returned.';
+    if (inv.count('hornOfJurgen')) {
+      o.push({ label: 'Here is the Horn.', run: () => {
+        inv.remove('hornOfJurgen'); flags.hornDelivered = true;
+        c.done('You have passed every trial. Accept our blessing: your Voice will recover faster. Now go. The World-Eater '
+          + 'has come to the summit of this very mountain, and only a Dragonborn can end it.'); return true;
+      } });
+    }
+  } else if (flags.victory) {
+    text = 'Dovahkiin. The World-Eater is gone, and the sky is yours. Walk in peace.';
+  } else if (q.isDone('wayOfTheVoice')) {
+    text = 'The World-Eater waits at the summit. The path begins east of Bleakrock Barrow.';
+  } else {
+    text = 'Few climb this far. Speak softly here; our voices can shake mountains.';
+  }
+  o.push(bye);
+  return { text, options: o };
+}
+
+const greybeard = () => ({ text: '(The master says nothing. A Greybeard\'s voice can shake the mountain, so they rarely speak.)', options: [bye] });
+
+const TALK = { jarl, merchant, innkeeper, hunter, sven, arngeir, borri: greybeard, einarth: greybeard };
+const NO_HAIL = ['jarl', 'arngeir', 'borri', 'einarth'];   // don't shout "Dragonborn!" at you
 
 export function talk(npcId, ctx) {
   const d = TALK[npcId]?.(ctx) ?? { text: '...', options: [bye] };
-  if (ctx.flags.victory && npcId !== 'jarl') d.text = `Dragonborn! ${d.text}`;   // the whole village knows
+  if (ctx.flags.victory && !NO_HAIL.includes(npcId)) d.text = `Dragonborn! ${d.text}`;   // the whole village knows
   return d;
 }

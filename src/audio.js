@@ -208,6 +208,7 @@ const SOUNDS = {
   levelUp: { vol: 0.6, make: (o, s) => { for (const [f, d] of [[660, 0], [990, 0.05], [1320, 0.1]]) s.tone('sine', f, f, 1.2, 0.3, d); } },
   quest:   { vol: 0.6, make: (o, s) => { [392, 494, 587, 784].forEach((f, i) => s.tone('triangle', f, f, 0.5, 0.3, i * 0.13)); } },
   questStart: { vol: 0.5, make: (o, s) => { s.tone('triangle', 440, 440, 0.4, 0.25); s.tone('triangle', 587, 587, 0.6, 0.25, 0.15); } },
+  dovahkiin: { vol: 1.0, make: (o, s) => { for (const [f, d] of [[82, 0], [110, 0.35], [98, 0.9]]) { s.tone('sawtooth', f, f * 0.9, 1.1, 0.22, d); s.tone('sine', f * 2, f * 1.8, 1.1, 0.15, d); } s.noise('lowpass', 300, 120, 2.2, 0.6, 1); } },
   word:    { vol: 0.8, make: (o, s) => { s.tone('sine', 110, 110, 2.2, 0.3); s.tone('sine', 165, 165, 2.2, 0.2); s.noise('bandpass', 300, 1200, 2, 0.25, 3); } },
   step:    { vol: 0.35, make: (o, s) => s.noise('lowpass', r(700, 1100), 300, 0.07, 0.5, 1) },
   death:   { vol: 0.8, make: (o, s) => { s.tone('sine', 110, 35, 1.2, 0.6); s.noise('lowpass', 500, 100, 0.8, 0.4); } },
