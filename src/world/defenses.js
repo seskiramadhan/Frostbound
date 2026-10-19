@@ -1,4 +1,4 @@
-// Frosthollow's defences for raids: barricades (breakable, repairable), the alarm bell and a
+// Riverholt's defences for raids: barricades (breakable, repairable), the alarm bell and a
 // watchtower you can stand on. Each piece is one merged, vertex-coloured mesh.
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';

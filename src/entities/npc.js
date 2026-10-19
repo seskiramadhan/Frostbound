@@ -104,16 +104,16 @@ export class Npc {
 
 // The Greybeards of High Hrothgar (stand in the monastery courtyard)
 export const GREYBEARDS = [
-  { id: 'arngeir', name: 'Master Arngeir', look: { tunic: 0x8c8a82, legs: 0x6e6c66, skin: 0xd2ad8c, hair: 0xe0e0da, beard: true, cloak: 0x7a7870 } },
-  { id: 'borri', name: 'Master Borri', look: { tunic: 0x86847c, legs: 0x6e6c66, skin: 0xcfa888, hair: 0xd8d8d2, beard: true } },
-  { id: 'einarth', name: 'Master Einarth', look: { tunic: 0x8a887f, legs: 0x6e6c66, skin: 0xd6b090, hair: 0xe4e4de, beard: true } },
+  { id: 'arngeir', name: 'Master Arnveir', look: { tunic: 0x8c8a82, legs: 0x6e6c66, skin: 0xd2ad8c, hair: 0xe0e0da, beard: true, cloak: 0x7a7870 } },
+  { id: 'borri', name: 'Master Borvi', look: { tunic: 0x86847c, legs: 0x6e6c66, skin: 0xcfa888, hair: 0xd8d8d2, beard: true } },
+  { id: 'einarth', name: 'Master Einhart', look: { tunic: 0x8a887f, legs: 0x6e6c66, skin: 0xd6b090, hair: 0xe4e4de, beard: true } },
 ];
 
-// Looks for the Frosthollow villagers
+// Looks for the Riverholt villagers
 export const VILLAGERS = [
-  { id: 'jarl', name: 'Jarl Hrolf', look: { tunic: 0x5a2a28, legs: 0x2e2620, skin: 0xd9b08c, hair: 0x8a7a68, beard: true, crown: true, cloak: 0x3a3f5a } },
-  { id: 'merchant', name: 'Ingrid', look: { tunic: 0x3f6a4a, legs: 0x3b2f26, skin: 0xe2bc98, hair: 0xc9a46a, apron: 0x8a7a5a } },
-  { id: 'innkeeper', name: 'Bera', look: { tunic: 0x7a5a3a, legs: 0x3b2f26, skin: 0xd8a882, hair: 0x5a3a24, apron: 0xd8d0c0 } },
-  { id: 'hunter', name: 'Ulf the Hunter', look: { tunic: 0x5a4a32, legs: 0x3b2f26, skin: 0xc99a74, hair: 0x2e241c, beard: true, cloak: 0x6a6a64 } },
-  { id: 'sven', name: 'Old Sven', look: { tunic: 0x4a4e58, legs: 0x2e2a26, skin: 0xd9b08c, hair: 0xd8d8d0, beard: true } },
+  { id: 'jarl', name: 'Jarl Balgrim', look: { tunic: 0x5a2a28, legs: 0x2e2620, skin: 0xd9b08c, hair: 0x8a7a68, beard: true, crown: true, cloak: 0x3a3f5a } },
+  { id: 'merchant', name: 'Lukas', look: { tunic: 0x3f6a4a, legs: 0x3b2f26, skin: 0xe2bc98, hair: 0xc9a46a, apron: 0x8a7a5a } },
+  { id: 'innkeeper', name: 'Delphina', look: { tunic: 0x7a5a3a, legs: 0x3b2f26, skin: 0xd8a882, hair: 0x5a3a24, apron: 0xd8d0c0 } },
+  { id: 'hunter', name: 'Faendir the Hunter', look: { tunic: 0x5a4a32, legs: 0x3b2f26, skin: 0xc99a74, hair: 0x2e241c, cloak: 0x6a6a64 } },
+  { id: 'sven', name: 'Alvar', look: { tunic: 0x4a4e58, legs: 0x2e2a26, skin: 0xd9b08c, hair: 0xd8d8d0, beard: true } },
 ];

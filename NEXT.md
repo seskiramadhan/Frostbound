@@ -1,8 +1,8 @@
 # NEXT.md — where Frostbound stands and what's pending
 
 Read this first in a new session, then `CLAUDE.md` for the rules.
-Last updated: 2026-10-19. **Live: build 6**; build 7 (camera look-up) is in a PR.
-**Next:** the user playtests build 6 (PC + iPad, solo and co-op) and sends notes; fix those in one PR.
+Last updated: 2026-10-19. **Live: build 7**; build 8 (Skyrim-ish village names) is in a PR.
+**Next:** the user playtests (PC + iPad + phone, solo and co-op) and sends notes; fix those in one PR.
 
 ## Live now
 https://seskiramadhan.github.io/Frostbound/ (merging into `master` deploys; players tap ↻ in the Bag)
@@ -11,26 +11,27 @@ https://seskiramadhan.github.io/Frostbound/ (merging into `master` deploys; play
 |---|---|---|
 | Phases 1–4 | Walking, combat (no dodge, by request), Frostfang Den, Bleakrock Barrow, word walls, shouts, bow, the first dragon, save/load | #1–#5 |
 | Co-op N1–N3 | PeerJS rooms (code / `?join=`), shared fights (host-run enemies), co-op dragon hunts | #6, #7, #9 |
-| Phase 5a–5d | Frosthollow village + NPCs, quests + quest log, audio + music, World-Eater, ending, post-game, Ice Form, New Game+ | #10–#12 |
+| Phase 5a–5d | Riverholt village + NPCs, quests + quest log, audio + music, World-Eater, ending, post-game, Ice Form, New Game+ | #10–#12 |
 | Round 4 | Sneak + stealing, fire magic + Magicka, hold-to-switch shouts, fewer draw calls | #13 |
 | Music + updates | CC0 music tracks; Bag ↻ one-click update + "New version available" | #14, #15 |
-| Round 5 | Raids on Frosthollow + the Jarl's requests | #17 |
+| Round 5 | Raids on Riverholt + the Jarl's requests | #17 |
 | Round 6 | Bandits (camp, archers, chief, raid wave) + enemy levels | #18 |
 | Round 7 | Main story: the Greybeards, The Way of the Voice, Ustengrav | #19 |
 | Round 8 | Day/night (night raids) + rocks you can stand on | #20 |
-| Camera | Look up freely (sky, dragons overhead): the camera keeps its angle when the ground pushes it up (build 7) | camera PR (branch `camera-look`, on #21) |
+| Camera | Look up freely (sky, dragons overhead): the camera keeps its angle when the ground pushes it up (build 7) | #22 |
+| Names | Village names that sound like Skyrim but aren't real: Riverholt, Jarl Balgrim, Lukas, Delphina (the inn's "mysterious friend"), Faendir the Hunter, Alvar, the Snoring Giant; the Greybeards are Masters Arnveir, Borvi and Einhart (build 8) | names PR |
 
-## The game today (build 6)
+## The game today (build 8)
 
-**Main story (close to Skyrim):** The Jarl's Summons (Jarl Hrolf) → The Howling Den (Frostfang Den, Alpha
+**Main story (close to Skyrim):** The Jarl's Summons (Jarl Balgrim) → The Howling Den (Frostfang Den, Alpha
 Wolf; TIID word wall) → Dragon Rising (Bleakrock Barrow, FUS word wall, the first dragon, its soul gives
-YOL) → **"DOVAHKIIN!"** → The Way of the Voice (High Hrothgar, Master Arngeir; shout for the Greybeards;
-Ustengrav: the horn's pedestal is empty, a note sends you to Bera at the Sleeping Bear; bring the Horn of
+YOL) → **"DOVAHKIIN!"** → The Way of the Voice (High Hrothgar, Master Arnveir; shout for the Greybeards;
+Ustengrav: the horn's pedestal is empty, a note sends you to Delphina at the Snoring Giant; bring the Horn of
 Jurgen Windcaller back → blessing: shouts recharge 25% faster) → The World-Eater (summit; phase 1 airborne,
 phase 2 grounded below 60% HP) → ending card, sunny valley, "Dragonborn".
 
-**Side quests:** Pelts for the Hunter (Ulf), The Ancestor's Blade (Sven), A Letter for the Jarl and Silence
-the Barrow (Bera), Bandits in the Woods (Ulf), plus the Jarl's repeatable requests.
+**Side quests:** Pelts for the Hunter (Faendir), The Ancestor's Blade (Alvar), A Letter for the Jarl and Silence
+the Barrow (Delphina), Bandits in the Woods (Faendir), plus the Jarl's repeatable requests.
 
 **Systems**
 - **Skills** (learn by doing, perk at max): One-Handed, Archery, Block, Destruction, Sneak.
@@ -43,10 +44,10 @@ the Barrow (Bera), Bandits in the Woods (Ulf), plus the Jarl's repeatable reques
   Hold the Shout button / R to switch.
 - **Sneak:** crouch (button / C), gradual noticing, stealth eye, sneak attacks (x3 sword, x2 arrow,
   x1.5 fire), easier at night and in dungeons. **Stealing** from 3 village strongboxes (fine if seen).
-- **Fire magic:** Spell Tome from Ingrid (80 gold): Firebolt (tap) / Flames (hold), Magicka bar.
+- **Fire magic:** Spell Tome from Lukas (80 gold): Firebolt (tap) / Flames (hold), Magicka bar.
 - **Raids** (bell in the square, the Jarl's "Defend" job, or 50% chance at nightfall near the village):
   4 waves (wolves → bandits → draugr → draugr + Draugr Warlord), 3 barricades (repair for 15 gold),
-  2 guards, a watchtower. Win: gold + the Warlord's Axe the first time. Lose: Ingrid's shop closed 5 min.
+  2 guards, a watchtower. Win: gold + the Warlord's Axe the first time. Lose: Lukas's shop closed 5 min.
 - **Jarl's requests:** one random job at a time (clear a dungeon / the bandit camp, hunt wolves, slay a
   dragon, defend the village), paid on return, pay grows.
 - **Bandit camp** (western forest): 3 bandits, 2 archers, the Bandit Chief; respawns after 5 min; chest.
@@ -79,9 +80,10 @@ History and Website Data") deletes the save: tell players to use ↻ to update i
 Blacksmith + dragon bone gear, a legendary dragon, buying a house, legendary skills, a Fire button /
 tutorial, a Dragonstone in Bleakrock Barrow, a second region, co-op N4 relay (8–10 players).
 Dropped: "The Raiders' Nest" fort siege.
-**Naming:** some names come straight from Skyrim (shout words, Dragonborn, World-Eater, Greybeards,
+**Naming:** some names come straight from Skyrim (shout words, Dragonborn, World-Eater, the Greybeards as a group,
 High Hrothgar, Ustengrav, the Horn of Jurgen Windcaller; "Bleakrock Barrow" ≈ "Bleak Falls Barrow").
-Fine for a personal fan game; rename if the user ever wants to share it widely.
+Village and Greybeard names are Skyrim sound-alikes on purpose (the user wants "similar, not real"). Fine for a personal
+fan game; rename the rest if the user ever wants to share it widely.
 
 ## Co-op: known gaps
 - Quests, chests, word walls, the Jarl's requests and stealing are per player (local), not shared.

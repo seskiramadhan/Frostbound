@@ -459,9 +459,9 @@ export const CONFIG = {
     soulTime: 3.5,
   },
 
-  // Frosthollow, the village in the flat valley centre (around the player spawn)
+  // Riverholt, the village in the flat valley centre (around the player spawn)
   village: {
-    name: 'Frosthollow',
+    name: 'Riverholt',
     roomPrice: 10,         // inn: rest to full health
     sellRate: 1,           // merchant pays value x sellRate
     stock: [               // merchant: [item, price]
@@ -515,7 +515,7 @@ export const CONFIG = {
     ngDmg: 0.3,
   },
 
-  // Raids on Frosthollow: started by the player (village bell, or the Jarl's "Defend" job).
+  // Raids on Riverholt: started by the player (village bell, or the Jarl's "Defend" job).
   // Raiders march in along lanes, break barricades, fight guards and players. 3 waves.
   raid: {
     center: [0, 2],          // where raiders head for
@@ -530,7 +530,7 @@ export const CONFIG = {
     barricadeHp: 160,
     repairCost: 15,          // gold to fix one barricade
     reward: { gold: 150, goldPerLevel: 75, firstWinItem: 'warlordAxe' },
-    shopClosed: 300,         // seconds Ingrid's shop stays shut after a lost raid
+    shopClosed: 300,         // seconds Lukas's shop stays shut after a lost raid
     guards: [[15, 6], [-15, 6]],
     bell: [-4.5, 3.5],
     tower: { x: 4, z: 17, height: 5, size: 3.2 },

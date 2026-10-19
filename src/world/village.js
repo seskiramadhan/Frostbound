@@ -1,4 +1,4 @@
-// Frosthollow: a small Nord village on the flat valley floor around the player spawn.
+// Riverholt: a small Nord village on the flat valley floor around the player spawn.
 // Every building, fence and prop is merged into one vertex-coloured mesh (one draw call).
 // Buildings are axis-aligned boxes for collision. Returns NPC spots for the villagers.
 import * as THREE from 'three';
@@ -58,10 +58,10 @@ export function buildVillage(terrain) {
   const y = (x, z) => terrain.heightAt(x, z);   // flat here, but stay honest
 
   colliders.push(building(parts, 0, -18, 14, 8, 3.6, '+z', { doorWidth: 2, chimney: true }));      // Jarl's longhouse
-  colliders.push(building(parts, -14, -4, 9, 8, 3, '+x', { sign: 0x7a5634, chimney: true }));      // The Sleeping Bear (inn)
-  colliders.push(building(parts, 14, -4, 8, 7, 2.8, '-x', { sign: 0x2e5a3a }));                    // Ingrid's shop
+  colliders.push(building(parts, -14, -4, 9, 8, 3, '+x', { sign: 0x7a5634, chimney: true }));      // The Snoring Giant (inn)
+  colliders.push(building(parts, 14, -4, 8, 7, 2.8, '-x', { sign: 0x2e5a3a }));                    // Lukas's shop
   colliders.push(building(parts, -13, 12, 6, 6, 2.6, '+x'));                                         // hunter's lodge
-  colliders.push(building(parts, 13, 12, 7, 6, 2.6, '-x', { chimney: true }));                       // Sven's house
+  colliders.push(building(parts, 13, 12, 7, 6, 2.6, '-x', { chimney: true }));                       // Alvar's house
 
   const M = new THREE.Matrix4();
   const put = (geo, color, x, py, z, ry = 0) => {
