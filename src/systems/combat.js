@@ -1,5 +1,5 @@
-// Resolves 'attack' events into hits: distance + swing arc, frontal block, dodge i-frames.
-// Emits 'damage', 'blocked', 'evaded' and 'death'. In co-op only the host runs this.
+// Resolves 'attack' events into hits: distance + swing arc, frontal block.
+// Emits 'damage', 'blocked' and 'death'. In co-op only the host runs this.
 import { CONFIG } from '../config.js';
 
 const B = CONFIG.combat.block;
@@ -30,8 +30,6 @@ export class Combat {
 
   applyHit(attacker, target, damage) {
     const ev = this.events;
-    if (target.invulnerable) { ev.emit('evaded', { target, attacker }); return; }
-
     const blocked = !!target.blocking && inArc(target, attacker, Infinity, B.arc);
     const amount = blocked ? damage * (1 - B.reduction) : damage;
     target.hp = Math.max(0, target.hp - amount);

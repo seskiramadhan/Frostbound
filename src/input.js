@@ -1,5 +1,5 @@
 // Keyboard/mouse (pointer lock) and touch (left joystick, right-side gestures, buttons).
-// Produces one command object per fixed tick: { move, run, attack, block, dodge, jump }.
+// Produces one command object per fixed tick: { move, run, attack, block, jump }.
 import { CONFIG, IS_TOUCH } from './config.js';
 
 const C = CONFIG.input;
@@ -10,8 +10,8 @@ export class Input {
     this.joyBase = joyBase;
     this.joyKnob = joyKnob;
 
-    // move: x = strafe right, y = forward, length 0..1. dodge: null or direction in the same space.
-    this.cmd = { move: { x: 0, y: 0 }, run: false, attack: false, block: false, dodge: null, jump: false };
+    // move: x = strafe right, y = forward, length 0..1
+    this.cmd = { move: { x: 0, y: 0 }, run: false, attack: false, block: false, jump: false };
     this.lookDX = 0;              // accumulated look deltas (radians), consumed by camera
     this.lookDY = 0;
 
@@ -19,11 +19,10 @@ export class Input {
     this.locked = false;
     this.mouseBlock = false;
     this.joyTouch = null;         // { id, ox, oy, x, y }
-    this.rightTouch = null;       // { id, sx, sy, x, y, t0, mode: pending|drag|block|done, bx, by }
+    this.rightTouch = null;       // { id, sx, sy, x, y, t0, mode: pending|drag|block, bx, by }
 
     // Edge-triggered presses, held until the next tick reads them
     this.attackPressed = false;
-    this.dodgePressed = null;     // 'move' (use move direction) or {x, y}
     this.jumpPressed = false;
 
     this.#bindKeyboardMouse();
@@ -45,14 +44,8 @@ export class Input {
     cmd.attack = this.attackPressed;
     cmd.jump = this.jumpPressed;
     cmd.block = this.mouseBlock || this.rightTouch?.mode === 'block';
-    const d = this.dodgePressed;
-    if (d === 'move') {
-      const len = Math.hypot(cmd.move.x, cmd.move.y);
-      cmd.dodge = len > 0.2 ? { x: cmd.move.x / len, y: cmd.move.y / len } : { x: 0, y: -1 };
-    } else cmd.dodge = d;
 
     this.attackPressed = false;
-    this.dodgePressed = null;
     this.jumpPressed = false;
     return cmd;
   }
@@ -89,8 +82,7 @@ export class Input {
       this.keys[e.code] = true;
       if (e.code === 'Space') e.preventDefault();
       if (e.repeat || !this.locked) return;
-      if (e.code === 'Space') this.dodgePressed = 'move';
-      if (e.code === 'KeyF') this.jumpPressed = true;
+      if (e.code === 'Space') this.jumpPressed = true;
     });
     addEventListener('keyup', e => { this.keys[e.code] = false; });
     addEventListener('blur', () => { this.keys = Object.create(null); this.mouseBlock = false; });
@@ -157,42 +149,28 @@ export class Input {
     el.addEventListener('touchcancel', end, opts);
   }
 
-  // Right-side touch: camera look is buffered while we decide between tap / hold / swipe / drag.
+  // Right-side touch: the first few px are held back so a tap doesn't nudge the camera.
   #rightMove(x, y) {
     const r = this.rightTouch;
     const dx = (x - r.x) * C.touchLookSensitivity, dy = (y - r.y) * C.touchLookSensitivity;
     r.x = x; r.y = y;
     if (r.mode === 'drag' || r.mode === 'block') { this.lookDX += dx; this.lookDY += dy; return; }
-    if (r.mode !== 'pending') return;
     r.bx += dx; r.by += dy;
-    const sdx = x - r.sx, sdy = y - r.sy, dist = Math.hypot(sdx, sdy);
-    if (dist >= C.swipeMinDist && (performance.now() - r.t0) / 1000 < C.swipeMaxTime) {
-      this.dodgePressed = { x: sdx / dist, y: -sdy / dist };
-      r.mode = 'done';
+    if (Math.hypot(x - r.sx, y - r.sy) > C.tapSlop) {
+      r.mode = 'drag';
+      this.lookDX += r.bx; this.lookDY += r.by;
     }
   }
 
   #updateRightTouch() {
     const r = this.rightTouch;
-    if (!r || r.mode !== 'pending') return;
-    const elapsed = (performance.now() - r.t0) / 1000;
-    const dist = Math.hypot(r.x - r.sx, r.y - r.sy);
-    if (dist > C.tapSlop && elapsed >= C.swipeMaxTime) this.#toDrag(r);
-    else if (dist <= C.tapSlop && elapsed >= C.holdTime) r.mode = 'block';
-  }
-
-  #toDrag(r) {
-    r.mode = 'drag';
-    this.lookDX += r.bx; this.lookDY += r.by;
+    if (r?.mode === 'pending' && (performance.now() - r.t0) / 1000 >= C.holdTime) r.mode = 'block';
   }
 
   #rightEnd(cancelled) {
     const r = this.rightTouch;
     this.rightTouch = null;
-    if (r.mode !== 'pending' || cancelled) return;
-    const elapsed = (performance.now() - r.t0) / 1000;
-    if (Math.hypot(r.x - r.sx, r.y - r.sy) <= C.tapSlop && elapsed < C.holdTime) this.attackPressed = true;
-    else this.#toDrag(r);   // a short, slow drag: apply the buffered look
+    if (r.mode === 'pending' && !cancelled) this.attackPressed = true;
   }
 
   #showJoystick() {

@@ -22,9 +22,9 @@ Goal: feel like Skyrim in 10-minute sessions on a phone. Keep the magic, cut the
 
 ## Controls
 - **Mobile:** left joystick = move, drag right side = camera, tap = attack,
-  hold = block, swipe = dodge, buttons for jump / shout / bow / crouch / interact
+  hold = block, buttons for jump / shout / bow / crouch / interact
 - **Desktop:** WASD move, mouse look (pointer lock), LMB attack, RMB block,
-  Space dodge, F jump, Q shout, C crouch, E interact
+  Space jump, Q shout, C crouch, E interact
 
 ## Core mechanics
 - **Third-person camera** following the player
@@ -79,7 +79,7 @@ competitive PvP, matchmaking, accounts/servers that cost money.
   Each player controls their own movement; guests send hits, host validates.
 - **Network-ready code (from Phase 2 on):** entities have numeric ids in a
   registry; hits/deaths go through the event bus only; input becomes one
-  command object per tick (`{move, run, attack, block, dodge, jump}`).
+  command object per tick (`{move, run, attack, block, jump}`).
 - **Co-op rules:**
   - Slow Time slows enemies only (never other players)
   - Menus and inventory don't pause the game while in co-op
@@ -90,7 +90,7 @@ competitive PvP, matchmaking, accounts/servers that cost money.
 
 ## Build phases (do in order, playable at every step)
 1. **Walking:** movement, third-person camera, terrain chunk, fog, mobile joysticks
-2. **Combat:** melee + block + dodge, one enemy (wolf or bandit) with basic AI, health/stamina
+2. **Combat:** melee + block + jump, one enemy (wolf or bandit) with basic AI, health/stamina
 3. **First quest:** one dungeon, loot + inventory, skill leveling, save/load
 4. **Dragons:** dragon AI + fight, word walls, the 3 shouts
 5. **Full game:** village + NPCs, main + side quests, final boss, post-game, audio, polish

@@ -91,7 +91,6 @@ export class Wolf {
   }
 
   get blocking() { return false; }
-  get invulnerable() { return false; }
 
   #setState(s, timer = 0) {
     this.state = s; this.stateTime = 0; this.timer = timer;

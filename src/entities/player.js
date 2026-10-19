@@ -1,5 +1,5 @@
 // The player: low-poly Nord with a sword, camera-relative movement on the terrain.
-// States: move, block, attack, dodge, stagger, dead. Driven by one command object per tick.
+// States: move, block, attack, stagger, dead. Driven by one command object per tick.
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { box, blobShadow, Flash, lerpAngle, lerp, clamp01 } from './model.js';
@@ -7,7 +7,7 @@ import { moveBody, pushOutOfColliders, clampToWorld, settleOnGround, turnToward 
 import { inArc } from '../systems/combat.js';
 
 const P = CONFIG.player, S = CONFIG.stats, CB = CONFIG.combat;
-const A = CB.attack, B = CB.block, D = CB.dodge, J = CB.jump, AIM = CB.autoAim;
+const A = CB.attack, B = CB.block, J = CB.jump, AIM = CB.autoAim;
 
 // Exported so co-op remote players can reuse the same look.
 export function buildModel() {
@@ -74,7 +74,6 @@ export class Player {
     this.pos = new THREE.Vector3();
     this.prevPos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
-    this.dodgeDir = new THREE.Vector3();
 
     this.model = buildModel();
     this.flash = new Flash(this.model.root);
@@ -98,8 +97,6 @@ export class Player {
     this.stateTime = 0;
     this.staggerTime = 0;
     this.attackBuffer = 0;
-    this.dodgeBuffer = 0;
-    this.dodgeInput = null;
     this.attackFacing = 0;
     this.struck = false;
     this.staminaDelay = 0;
@@ -109,7 +106,6 @@ export class Player {
   }
 
   get blocking() { return this.state === 'block'; }
-  get invulnerable() { return this.state === 'dodge' && this.stateTime < D.iframes; }
   get canRespawn() { return !this.alive && this.stateTime >= S.respawnDelay; }
 
   #setState(s) { this.state = s; this.stateTime = 0; }
@@ -119,7 +115,7 @@ export class Player {
     this.staminaDelay = S.staminaRegenDelay;
   }
 
-  // Fixed-step update. cmd = { move: {x, y}, run, attack, block, dodge: {x, y} | null, jump }, yaw = camera yaw.
+  // Fixed-step update. cmd = { move: {x, y}, run, attack, block, jump }, yaw = camera yaw.
   tick(dt, cmd, yaw) {
     this.prevPos.copy(this.pos);
     this.prevFacing = this.facing;
@@ -134,8 +130,6 @@ export class Player {
 
     this.#regen(dt);
     this.attackBuffer = cmd.attack ? A.buffer : Math.max(0, this.attackBuffer - dt);
-    if (cmd.dodge) { this.dodgeBuffer = D.buffer; this.dodgeInput = cmd.dodge; }
-    else this.dodgeBuffer = Math.max(0, this.dodgeBuffer - dt);
 
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw);   // camera forward on XZ
     const rx = Math.cos(yaw), rz = -Math.sin(yaw);    // camera right
@@ -144,7 +138,7 @@ export class Player {
     const mz = fz * cmd.move.y + rz * cmd.move.x;
 
     this.#advanceState();
-    if (this.state === 'move' || this.state === 'block') this.#chooseAction(cmd, mx, mz, fx, fz, rx, rz, camFacing);
+    if (this.state === 'move' || this.state === 'block') this.#chooseAction(cmd, mx, mz, camFacing);
 
     let wx = 0, wz = 0, turnTo = null, turnSpeed = P.turnSpeed;
     switch (this.state) {
@@ -162,15 +156,9 @@ export class Player {
         break;
     }
 
-    if (this.state === 'dodge') {
-      const k = Math.sqrt(Math.max(0, 1 - this.stateTime / D.duration));
-      this.vel.x = this.dodgeDir.x * D.speed * k;
-      this.vel.z = this.dodgeDir.z * D.speed * k;
-    } else {
-      const k = Math.min(1, P.accel * (this.grounded ? 1 : P.airControl) * dt);
-      this.vel.x += (wx - this.vel.x) * k;
-      this.vel.z += (wz - this.vel.z) * k;
-    }
+    const k = Math.min(1, P.accel * (this.grounded ? 1 : P.airControl) * dt);
+    this.vel.x += (wx - this.vel.x) * k;
+    this.vel.z += (wz - this.vel.z) * k;
 
     moveBody(this, this.vel.x * dt, this.vel.z * dt, this.terrain, P.maxClimb);
     pushOutOfColliders(this.pos, this.radius, this.colliders);
@@ -195,23 +183,13 @@ export class Player {
         this.events.emit('attack', { attacker: this, damage: A.damage, reach: A.reach, arc: A.arc });
       }
       if (t >= A.windup + A.recover) this.#setState('move');
-    } else if (this.state === 'dodge') {
-      if (t >= D.duration) this.#setState('move');
     } else if (this.state === 'stagger') {
       if (t >= this.staggerTime) this.#setState('move');
     }
   }
 
-  // From move/block: start a dodge, attack or jump, else settle on move/block.
-  #chooseAction(cmd, mx, mz, fx, fz, rx, rz, camFacing) {
-    if (this.dodgeBuffer > 0 && this.grounded && this.stamina >= D.staminaCost) {
-      const d = this.dodgeInput;
-      this.dodgeDir.set(fx * d.y + rx * d.x, 0, fz * d.y + rz * d.x).normalize();
-      this.#spend(D.staminaCost);
-      this.dodgeBuffer = 0;
-      this.#setState('dodge');
-      return;
-    }
+  // From move/block: start an attack or jump, else settle on move/block.
+  #chooseAction(cmd, mx, mz, camFacing) {
     if (this.attackBuffer > 0 && this.grounded) {
       this.#spend(A.staminaCost);
       this.attackBuffer = 0;
@@ -314,15 +292,6 @@ export class Player {
         armR.rotation.set(-1.4, 0, 0.8);
         armL.rotation.set(-1.1, 0, -0.5);
         break;
-      case 'dodge': {
-        // Lean into the dodge direction, relative to facing
-        const f = this.facing, k = Math.sin(clamp01(t / D.duration) * Math.PI);
-        const fwd = this.dodgeDir.x * Math.sin(f) + this.dodgeDir.z * Math.cos(f);
-        const right = this.dodgeDir.x * -Math.cos(f) + this.dodgeDir.z * Math.sin(f);
-        body.rotation.set(fwd * 0.5 * k, 0, -right * 0.5 * k);
-        body.position.y = -0.15 * k;
-        break;
-      }
       case 'stagger':
         body.rotation.x = -0.35 * (1 - clamp01(t / this.staggerTime));
         break;
