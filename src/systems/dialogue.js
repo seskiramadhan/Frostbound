@@ -1,7 +1,7 @@
 // What each villager says, depending on quest progress. talk() returns
 // { text, options: [{ label, run }] }; run() changes state and returns true to keep the
 // conversation open (it is redrawn), or false to close it.
-// ctx: { quests, inventory, flags, player, trade(), rest(), done(msg) }
+// ctx: { quests, inventory, flags, player, trade(), rest(), done(msg), newGamePlus(), ng }
 import { CONFIG } from '../config.js';
 
 const V = CONFIG.village;
@@ -29,8 +29,24 @@ function jarl(c) {
     text = q.stepText('dragonRising') === 'Slay the dragon'
       ? 'The dragon circles the valley. Use the bow when it flies, and the Voice to bring it down.'
       : 'Bleakrock Barrow lies north, under the peak. The dead guard it. Find whatever the old Nords left there.';
+  } else if (flags.victory) {
+    text = c.confirmNg
+      ? 'Begin anew? You will keep your skill, but the world forgets your deeds, and its beasts grow fiercer.'
+      : 'Hail, Dragonborn! The skies over Frosthollow are clear for the first time in an age. Songs will be sung of you.';
+    if (c.confirmNg) {
+      o.push({ label: 'Yes, start New Game+', run: () => { c.newGamePlus(); return false; } });
+      o.push({ label: 'Not yet', run: () => { c.confirmNg = false; return true; } });
+    } else {
+      o.push({ label: `I wish to begin anew (New Game+${c.ng ? ` ${c.ng + 1}` : ''})`, run: () => { c.confirmNg = true; return true; } });
+    }
+  } else if (q.isActive('worldEater')) {
+    text = 'The path up the peak starts east of the old barrow. The World-Eater waits at the summit. Strike true, Dragonborn.';
   } else if (q.isDone('dragonRising')) {
-    text = 'Dragonborn. The World-Eater stirs on the peak. When the time comes, Frosthollow stands with you.';
+    text = 'Dragonborn. The World-Eater stirs on the peak, and the sky darkens by the day.';
+    o.push({ label: 'I\'m ready to face the World-Eater.', run: () => {
+      q.start('worldEater');
+      c.done('Then go. The path starts at the foot of the peak, east of the barrow. Frosthollow stands with you.'); return true;
+    } });
   } else {
     text = 'Welcome to Frosthollow. Keep your blade sharp; these are hard days.';
   }
@@ -119,5 +135,7 @@ function sven(c) {
 const TALK = { jarl, merchant, innkeeper, hunter, sven };
 
 export function talk(npcId, ctx) {
-  return TALK[npcId]?.(ctx) ?? { text: '...', options: [bye] };
+  const d = TALK[npcId]?.(ctx) ?? { text: '...', options: [bye] };
+  if (ctx.flags.victory && npcId !== 'jarl') d.text = `Dragonborn! ${d.text}`;   // the whole village knows
+  return d;
 }

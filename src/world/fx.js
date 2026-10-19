@@ -74,6 +74,15 @@ export class Fx {
     }
   }
 
+  // Ice Form: a cone of frost along the facing.
+  ice(origin, facing, range) {
+    for (let k = 0; k < 60; k++) {
+      const a = facing + (Math.random() - 0.5) * 1.1, sp = range * (1.4 + Math.random());
+      this.emit(origin.x + Math.sin(facing), origin.y + 1.5, origin.z + Math.cos(facing), Math.sin(a) * sp, (Math.random() - 0.4) * 2, Math.cos(a) * sp,
+        0.7, 0.6, 0.85, 1, { drag: 2.5 });
+    }
+  }
+
   // Burst of fire on the ground (dragon fire landing, burning corpse).
   burn(p, radius, count = 6) {
     for (let k = 0; k < count; k++) {

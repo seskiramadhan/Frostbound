@@ -197,6 +197,7 @@ const SOUNDS = {
   push:    { vol: 1.0, make: (o, s) => { for (const f of [110, 164, 220]) s.tone('sawtooth', f, f * 0.8, 0.65, 0.15); s.noise('lowpass', 500, 2400, 0.7, 0.7, 0.8); } },
   slowTime: { vol: 0.9, make: (o, s) => { s.tone('sine', 330, 110, 1.4, 0.4); s.tone('sine', 495, 165, 1.4, 0.25); s.noise('bandpass', 800, 200, 1.2, 0.25, 2); } },
   fireBreath: { vol: 1.0, make: (o, s) => { s.noise('bandpass', 400, 1600, 0.9, 0.8, 0.7); s.tone('sawtooth', 95, 70, 0.7, 0.12); } },
+  iceForm: { vol: 0.9, make: (o, s) => { s.noise('highpass', 6000, 2000, 0.9, 0.5, 0.7); s.tone('sine', 1760, 880, 0.9, 0.12); s.tone('triangle', 220, 160, 0.8, 0.25); } },
   fire:    { vol: 0.7, make: (o, s) => s.noise('bandpass', r(500, 800), r(900, 1300), 0.32, 0.5, 0.8) },
   roar:    { vol: 1.0, make: (o, s) => { s.noise('lowpass', 250, 900, 0.5, 0.9, 1.5); s.noise('lowpass', 900, 180, 1.4, 0.9, 1.5, 0.45); s.tone('sawtooth', 70, 42, 1.8, 0.25); } },
   thud:    { vol: 1.0, make: (o, s) => { s.tone('sine', 70, 30, 0.6, 0.9); s.noise('lowpass', 400, 80, 0.5, 0.8); } },

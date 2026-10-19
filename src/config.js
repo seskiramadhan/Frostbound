@@ -239,6 +239,7 @@ export const CONFIG = {
     entrances: {           // where each dungeon's door sits in the valley (distance from spawn)
       den: { distance: 85, angle0: 2.2, style: 'cave' },
       barrow: { distance: 100, angle0: 4.7, style: 'ruin' },
+      summit: { at: [50, -106], style: 'path' },   // foot of the peak
     },
     inside: { wanderRadius: 2, leashRadius: 30 },  // creature overrides inside dungeons
     ambient: 0.32,         // baked light where no brazier reaches
@@ -303,6 +304,8 @@ export const CONFIG = {
       cooldown: 30, duration: 7, scale: 0.3 },
     fireBreath: { name: 'Fire Breath', word: 'YOL', desc: 'A cone of fire in front of you.',
       cooldown: 20, range: 9, arc: 0.55, damage: 35 },
+    iceForm: { name: 'Ice Form', word: 'IIZ', desc: 'Freezes enemies in front of you solid for a while.',
+      cooldown: 35, range: 11, arc: 0.6, damage: 10, freeze: 6 },
   },
 
   bow: {
@@ -359,6 +362,43 @@ export const CONFIG = {
     ],
     rewards: { pelts: 60, blade: 120, letter: 40, barrow: 100, report: 75 },
     peltsWanted: 3,
+  },
+
+  // The summit of the peak: World-Eater arena (its own level, like a dungeon but outdoors)
+  summit: {
+    name: 'Summit of the Peak',
+    origin: [0, 0, 1400],  // far from the valley and the dungeons
+    radius: 36,
+    fog: { color: 0x59626d, near: 18, far: 115 },
+    light: { hemiSky: 0x9aa6b4, hemiGround: 0x2a2e34, hemiIntensity: 1.2, sun: 0.5 },
+  },
+
+  // The final boss: a Dragon with these overrides
+  worldEater: {
+    name: 'World-Eater',
+    maxHealth: 1800,
+    dmgMul: 1.5,
+    scale: 1.45,
+    colors: { scale: 0x2a2228, belly: 0x5a4a52, wing: 0x3a1e2a, horn: 0xc9b89a },
+    phase2At: 0.6,         // health fraction where it is forced down for good
+    enrageGap: 0.6,        // phase 2: attack gaps multiplied by this
+    arriveDelay: 3,
+    reward: 1000,
+  },
+
+  // After the World-Eater falls: sunny valley + post-game
+  victory: {
+    fog: { color: 0xd6e6f2, near: 40, far: 180 },
+    light: { skyColor: 0xf2f8ff, hemiIntensity: 1.9, sunIntensity: 2.1 },
+  },
+  postGame: {
+    dragonEvery: [360, 600], // seconds between random dragon attacks in the valley
+    dungeonRespawn: 600,     // seconds before a cleared dungeon refills (on entry)
+    tierHp: 0.4,             // per respawn tier: +40% enemy health
+    tierDmg: 0.25,           // +25% enemy damage
+    tierLoot: { items: { healPotion: 2 }, goldPerTier: 80 },
+    ngHp: 0.5,               // New Game+: +50% enemy health per NG level
+    ngDmg: 0.3,
   },
 
   // Co-op dragon hunts (N3): each hunt level makes the next dragon tougher.

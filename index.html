@@ -239,6 +239,16 @@
   .dlg-opt:disabled { opacity: 0.4; }
   .dlg-opt.head { background: none; border: 0; padding: 8px 2px 0; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; opacity: 0.6; cursor: default; }
   .q-done { opacity: 0.45; }
+  /* Ending */
+  #ending {
+    position: fixed; inset: 0; z-index: 12; display: none; align-items: center; justify-content: center; padding: 20px;
+    background: radial-gradient(ellipse at center, rgba(40, 52, 66, 0.92), rgba(8, 10, 14, 0.97)); text-align: center; box-sizing: border-box;
+  }
+  #ending .e-panel { max-width: 460px; }
+  #ending h1 { margin: 0 0 6px; font-size: clamp(34px, 9vw, 54px); font-weight: 400; letter-spacing: 0.2em; text-transform: uppercase; color: #e8c86a; }
+  #ending p { font-size: 16px; line-height: 1.5; margin: 10px 0; opacity: 0.92; }
+  #ending .e-credits { font-size: 12px; opacity: 0.6; margin-top: 18px; line-height: 1.6; }
+  #ending-continue { margin-top: 18px; padding: 10px 22px; font: 15px Georgia, serif; letter-spacing: 0.12em; background: #e8c86a; color: #1b1f24; border: 0; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -311,6 +321,14 @@
   </div>
 </div>
 <div id="dialog"><div id="dialog-name"></div><div id="dialog-text"></div><div id="dialog-opts"></div></div>
+<div id="ending"><div class="e-panel">
+  <h1>Dragonborn</h1>
+  <p>The World-Eater falls from the summit, and its soul pours into you.</p>
+  <p>For the first time in an age the storm over the valley breaks. Sunlight finds Frosthollow, and the villagers speak one word as you pass: <i>Dragonborn</i>.</p>
+  <p>Dragons still roam the far skies. The barrows stir again. And somewhere deep in Bleakrock, a forgotten wall has begun to glow.</p>
+  <div class="e-credits">Frostbound · made with Three.js<br>Music: "Boss Battle Music" by SubspaceAudio, "Medieval: Exploration" by RandomMind (CC0, OpenGameArt)</div>
+  <button id="ending-continue">Continue</button>
+</div></div>
 <div id="fade"></div>
 
 <script>

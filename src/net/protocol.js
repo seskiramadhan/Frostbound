@@ -21,7 +21,7 @@
 //   flags: 1 = alive, 2 = visible
 import * as THREE from 'three';
 
-export const VERSION = 3;
+export const VERSION = 4;
 
 export const MSG = {
   HELLO: 'hello', POSE: 'pose', LOOK: 'look', HIT: 'hit', SHOUT: 'shout',

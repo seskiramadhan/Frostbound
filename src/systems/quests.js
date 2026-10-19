@@ -42,6 +42,16 @@ export const QUESTS = {
     ],
     reward: w => w.inventory.addGold(CONFIG.loot.dragonReward),
   },
+  worldEater: {
+    name: 'The World-Eater', main: true,
+    steps: [
+      { text: 'Climb to the summit of the peak', done: w => w.visited.summit,
+        target: w => ({ level: w.valley, pos: w.entrances.summit.front }) },
+      { text: 'Defeat the World-Eater', done: w => w.worldEater.state === 'dead',
+        target: w => (w.worldEater.active ? { level: w.summit, pos: w.worldEater.pos } : { level: w.summit, pos: w.summitCentre }) },
+    ],
+    reward: w => w.inventory.addGold(CONFIG.worldEater.reward),
+  },
 
   // Side quests, given by villagers
   hunterPelts: {

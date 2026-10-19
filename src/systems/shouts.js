@@ -5,7 +5,7 @@ import { CONFIG } from '../config.js';
 import { inArc } from './combat.js';
 
 const SH = CONFIG.shouts;
-export const SHOUT_IDS = ['push', 'slowTime', 'fireBreath'];
+export const SHOUT_IDS = ['push', 'slowTime', 'fireBreath', 'iceForm'];
 
 export class Shouts {
   constructor(events, entities, combat, fx) {
@@ -54,12 +54,14 @@ export class Shouts {
     this.#fx(player, id, def);
     if (id === 'push') this.#push(player, def);
     else if (id === 'fireBreath') this.#fire(player, def);
+    else if (id === 'iceForm') this.#ice(player, def);
     else if (id === 'slowTime') this.slowLeft = def.duration;
   }
 
   #fx(player, id, def) {
     const f = player.facing;
     if (id === 'push') this.fx.shout(player.pos, f, def.range);
+    else if (id === 'iceForm') this.fx.ice(player.pos, f, def.range);
     else if (id === 'fireBreath') {
       const dir = { x: Math.sin(f), y: -0.05, z: Math.cos(f) };
       this.fx.fire({ x: player.pos.x + dir.x, y: player.pos.y + 1.6, z: player.pos.z + dir.z }, dir, def.range, 60);
@@ -82,6 +84,16 @@ export class Shouts {
       if (!inArc(player, e, def.range + e.radius, def.arc)) continue;
       this.combat.applyHit(player, e, def.damage, 'shout');
       if (e.alive) e.knockback?.(player.pos, def.force, def.stagger);
+    }
+  }
+
+  // Freeze everything in the cone; a flying dragon is knocked down.
+  #ice(player, def) {
+    for (const e of this.#targets(player)) {
+      if (e.flying) { e.forceDown?.(); continue; }
+      if (!inArc(player, e, def.range + e.radius, def.arc)) continue;
+      this.combat.applyHit(player, e, def.damage, 'shout');
+      if (e.alive) e.freeze?.(def.freeze);
     }
   }
 

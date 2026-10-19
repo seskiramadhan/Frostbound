@@ -17,19 +17,32 @@ export function setupEnvironment(scene) {
   return { scene, hemi, sun, torch };
 }
 
-// Switch lighting/fog between the open valley and a dungeon.
-export function applyAmbience(env, kind) {
-  const F = CONFIG.fog, L = CONFIG.light, DG = CONFIG.dungeon;
-  const inside = kind !== 'valley';
-  const fog = inside ? DG.fog : F;
+// Switch lighting/fog: 'valley' (sunny once the World-Eater is gone), 'summit' (storm),
+// or a dungeon (anything else).
+export function applyAmbience(env, kind, sunny = false) {
+  const F = CONFIG.fog, L = CONFIG.light, DG = CONFIG.dungeon, SU = CONFIG.summit, VI = CONFIG.victory;
+  const inside = kind !== 'valley' && kind !== 'summit';
+  const fog = kind === 'summit' ? SU.fog : inside ? DG.fog : sunny ? VI.fog : F;
   env.scene.background.setHex(fog.color);
   env.scene.fog.color.setHex(fog.color);
   env.scene.fog.near = fog.near;
   env.scene.fog.far = fog.far;
-  env.hemi.color.setHex(inside ? DG.light.hemiSky : L.skyColor);
-  env.hemi.groundColor.setHex(inside ? DG.light.hemiGround : L.groundColor);
-  env.hemi.intensity = inside ? DG.light.hemiIntensity : L.hemiIntensity;
-  env.sun.intensity = inside ? 0 : L.sunIntensity;
+  if (inside) {
+    env.hemi.color.setHex(DG.light.hemiSky);
+    env.hemi.groundColor.setHex(DG.light.hemiGround);
+    env.hemi.intensity = DG.light.hemiIntensity;
+    env.sun.intensity = 0;
+  } else if (kind === 'summit') {
+    env.hemi.color.setHex(SU.light.hemiSky);
+    env.hemi.groundColor.setHex(SU.light.hemiGround);
+    env.hemi.intensity = SU.light.hemiIntensity;
+    env.sun.intensity = SU.light.sun;
+  } else {
+    env.hemi.color.setHex(sunny ? VI.light.skyColor : L.skyColor);
+    env.hemi.groundColor.setHex(L.groundColor);
+    env.hemi.intensity = sunny ? VI.light.hemiIntensity : L.hemiIntensity;
+    env.sun.intensity = sunny ? VI.light.sunIntensity : L.sunIntensity;
+  }
   env.torch.intensity = inside ? DG.torch.intensity : 0;
 }
 
