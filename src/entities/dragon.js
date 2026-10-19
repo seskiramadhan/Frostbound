@@ -140,6 +140,9 @@ export class Dragon {
 
     this.model = buildModel();
     this.flash = new Flash(this.model.root);
+    this.dmgMul = 1;
+    this.baseColors = [];                // to undo char() when a hunt dragon is reused
+    this.model.root.traverse(o => { if (o.material?.color) this.baseColors.push([o.material, o.material.color.getHex()]); });
     this.model.root.visible = this.model.shadow.visible = false;
     scene.add(this.model.root, this.model.shadow);
   }
@@ -152,7 +155,12 @@ export class Dragon {
   #set(s) { this.state = s; this.stateTime = 0; this.struck = false; this.tick2 = 0; }
 
   // Fly in from far away toward `target`.
-  activate(target) {
+  // Fly in from far away toward `target`. opts (dragon hunts): { name, maxHp, dmgMul }.
+  activate(target, opts = {}) {
+    this.name = opts.name ?? DR.name;
+    this.maxHp = opts.maxHp ?? DR.maxHealth;
+    this.dmgMul = opts.dmgMul ?? 1;
+    this.#restoreColors();
     this.target = target;
     const a = rand() * Math.PI * 2;
     this.pos.set(target.pos.x + Math.cos(a) * DR.spawnDistance, this.#groundAt(target.pos) + DR.altitude + 10, target.pos.z + Math.sin(a) * DR.spawnDistance);
@@ -261,7 +269,7 @@ export class Dragon {
             this.tick2 = DR.airFire.every;
             const gx = this.pos.x + Math.sin(this.facing) * DR.airFire.ahead, gz = this.pos.z + Math.cos(this.facing) * DR.airFire.ahead;
             const gy = this.level.heightAt(gx, gz);
-            this.events.emit('areaAttack', { attacker: this, x: gx, y: gy, z: gz, radius: DR.airFire.radius, damage: DR.airFire.damage });
+            this.events.emit('areaAttack', { attacker: this, x: gx, y: gy, z: gz, radius: DR.airFire.radius, damage: DR.airFire.damage * this.dmgMul });
             this.fx.burn({ x: gx, y: gy, z: gz }, DR.airFire.radius, 8);
             this.breathing = 0.25;
           }
@@ -373,7 +381,7 @@ export class Dragon {
       if (this.stateTime > tStrike && this.stateTime < tStrike + T.time) {
         if ((this.tick2 -= dt) <= 0) {
           this.tick2 = T.every;
-          this.events.emit('attack', { attacker: this, damage: T.damage, reach: T.range, arc: T.arc });
+          this.events.emit('attack', { attacker: this, damage: T.damage * this.dmgMul, reach: T.range, arc: T.arc });
         }
         this.breathing = 0.1;
         // Track the player slowly while breathing
@@ -381,10 +389,10 @@ export class Dragon {
       }
     } else if (!this.struck && this.stateTime >= tStrike) {
       this.struck = true;
-      if (s === 'bite') this.events.emit('attack', { attacker: this, damage: T.damage, reach: T.reach, arc: T.arc });
+      if (s === 'bite') this.events.emit('attack', { attacker: this, damage: T.damage * this.dmgMul, reach: T.reach, arc: T.arc });
       else {
         const bx = this.pos.x - Math.sin(this.facing) * 4, bz = this.pos.z - Math.cos(this.facing) * 4;
-        this.events.emit('areaAttack', { attacker: this, x: bx, y: this.pos.y, z: bz, radius: T.reach - 2, damage: T.damage });
+        this.events.emit('areaAttack', { attacker: this, x: bx, y: this.pos.y, z: bz, radius: T.reach - 2, damage: T.damage * this.dmgMul });
       }
     }
     if (this.stateTime >= tStrike + T.time) { this.#set('ground'); this.attackIn = range(DR.attackGap); }
@@ -455,5 +463,12 @@ export class Dragon {
   // Burnt look after death.
   char() {
     this.model.root.traverse(o => { if (o.material?.color) o.material.color.multiplyScalar(0.35); });
+    this.charred = true;
+  }
+
+  #restoreColors() {
+    if (!this.charred) return;
+    for (const [m, hex] of this.baseColors) m.color.setHex(hex);
+    this.charred = false;
   }
 }

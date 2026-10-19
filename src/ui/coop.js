@@ -1,4 +1,5 @@
-// Co-op tab of the Bag menu: pick a name, host a room or join one by code, share the link.
+// Co-op tab of the Bag menu: pick a name, host a room or join one by code, share the link,
+// and (host) start a dragon hunt.
 import { CONFIG } from '../config.js';
 
 const NAME_KEY = 'frostbound.name';
@@ -18,8 +19,10 @@ function el(tag, cls, text) {
 }
 
 export class CoopPanel {
-  constructor(session) {
+  // hunt: { blocker() -> reason | null, start(), level(), active() }
+  constructor(session, hunt) {
     this.session = session;
+    this.hunt = hunt;
     this.status = '';
     this.name = loadName() || `Nord${Math.floor(100 + Math.random() * 900)}`;
     this.codeDraft = '';
@@ -51,11 +54,22 @@ export class CoopPanel {
         share.appendChild(btn);
         row('m-hint', 'Friends open the link (or type the code in their Co-op tab).');
       }
+      row('m-head', 'Dragon hunt');
+      if (this.hunt.active()) row('m-hint', 'A hunt is on: look to the sky!');
+      else if (s.role === 'host') {
+        const why = this.hunt.blocker();
+        const hb = el('button', 'coop-btn', `Start a dragon hunt (level ${this.hunt.level()})`);
+        hb.disabled = !!why;
+        hb.addEventListener('click', () => { this.hunt.start(); rerender(); });
+        row('coop-row').appendChild(hb);
+        row('m-hint', why ?? 'A dragon comes for your group. Tougher every hunt; everyone gets gold.');
+      } else row('m-hint', 'The host can start a dragon hunt for the whole group.');
+
       const leave = el('button', 'coop-btn quiet', 'Leave room');
       leave.addEventListener('click', () => { s.leave(); rerender(); });
       row('coop-row').appendChild(leave);
       if (this.status) row('m-hint', this.status);
-      row('m-hint', 'Co-op preview: you see each other move. Enemies, loot and quests are not shared yet.');
+      row('m-hint', 'Enemies are shared (the host runs them); loot and quests are your own.');
       return;
     }
 

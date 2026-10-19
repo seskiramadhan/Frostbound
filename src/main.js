@@ -72,7 +72,8 @@ for (const d of Object.values(dungeons)) {
   creatures.push(...r.creatures);
   bosses[d.key] = r.boss;
 }
-const dragon = entities.add(new Dragon(scene, valley, events, fx, entities));
+const dragon = entities.add(new Dragon(scene, valley, events, fx, entities));          // the story dragon
+const huntDragon = entities.add(new Dragon(scene, valley, events, fx, entities));      // co-op dragon hunts
 const chests = Object.values(dungeons).flatMap(d => d.chests.map(c => new Chest(scene, d, c.pos, c.lootKey, Math.PI)));
 const projectiles = new Projectiles(scene, entities, combat);
 const tpCam = new ThirdPersonCamera(camera, valley);
@@ -91,9 +92,11 @@ const quests = new Quests(events, world);
 const hud = new Hud();
 const session = new Session({
   events, scene, player, inventory, entities, combat, shouts, levels, dragon,
-  enemies: [...creatures, dragon], onHurt: guestHurt,
+  enemies: [...creatures, dragon, huntDragon], onHurt: guestHurt,
 });
-const coopPanel = new CoopPanel(session);
+const coopPanel = new CoopPanel(session, {
+  blocker: () => huntBlocker(), start: () => startHunt(), level: () => huntsWon + 1, active: () => huntDragon.active,
+});
 const menu = new Menu(inventory, skills, player, shouts, coopPanel);
 const input = new Input(renderer.domElement, $('joy'), $('joy-knob'), {
   jump: $('btn-jump'), interact: $('btn-interact'), menu: $('btn-bag'), shout: $('btn-shout'), bow: $('btn-bow'),
@@ -242,13 +245,56 @@ events.on('netEnded', ({ reason, wasGuest }) => {
 });
 events.on('dragonRoar', () => { hud.announce('A dragon approaches!'); tpCam.shake(0.45); });
 events.on('dragonDowned', () => hud.toast('The dragon crashes to the ground!'));
-events.on('dragonDead', () => {
+events.on('dragonDead', ({ dragon: d }) => {
+  if (d === huntDragon) { huntWon(); return; }
   dragon.char();
   shouts.learn('fireBreath', true);
   shouts.select('fireBreath');
   hud.announce('Dragon soul absorbed', `Word of Power: ${CONFIG.shouts.fireBreath.word}. ${CONFIG.shouts.fireBreath.name}`);
   save();
 });
+
+// ---- Co-op dragon hunts (N3) ----
+const HUNT = CONFIG.hunt;
+let huntsWon = 0;        // this player's hunts; the host's count sets the next hunt's level
+
+// Why the host can't start a hunt right now, or null if they can.
+function huntBlocker() {
+  if (session.role !== 'host') return 'Only the host can start a dragon hunt';
+  if (!quests.isDone('dragonRising')) return 'Slay your first dragon (Dragon Rising) to unlock hunts';
+  if (huntDragon.active) return 'A hunt is already on';
+  if (player.level !== valley) return 'Go out into the valley first';
+  return null;
+}
+
+function startHunt() {
+  if (huntBlocker()) return;
+  const level = huntsWon + 1;
+  const data = {
+    level,
+    name: HUNT.names[Math.min(level - 1, HUNT.names.length - 1)],
+    maxHp: Math.round(CONFIG.dragon.maxHealth * (1 + HUNT.hpPerLevel * (level - 1))),
+  };
+  huntDragon.activate(player, { name: data.name, maxHp: data.maxHp, dmgMul: 1 + HUNT.dmgPerLevel * (level - 1) });
+  events.emit('huntStart', { dragon: huntDragon, data });
+}
+
+events.on('huntStart', ({ data }) => {
+  huntDragon.name = data.name;          // guests learn the name/health from the host
+  huntDragon.maxHp = data.maxHp;
+  huntDragon.huntLevel = data.level;
+  hud.announce('Dragon hunt!', `${data.name} (level ${data.level}) is coming`);
+  if (menu.open) menu.render();
+});
+
+function huntWon() {
+  huntDragon.char();
+  huntsWon++;
+  const gold = HUNT.goldPerLevel * (huntDragon.huntLevel ?? 1);
+  hud.announce(`${huntDragon.name} slain!`, `Hunt reward: ${gold} gold`);
+  inventory.addGold(gold);
+  save();
+}
 
 // Co-op guest: an enemy (run by the host) hit us. Apply it with our own armour and block skill.
 function guestHurt(damage, blocked, from) {
@@ -276,6 +322,7 @@ function worldJSON() {
 function save() {
   if (resetting || !started || !player.alive) return;
   writeSave({
+    hunts: huntsWon,
     player: { level: player.level.key ?? 'valley', pos: player.pos.toArray(), facing: player.facing, hp: player.hp, bowMode: player.bowMode },
     inventory: inventory.toJSON(),
     skills: skills.toJSON(),
@@ -289,6 +336,7 @@ function applySave(s) {
   inventory.load(s.inventory);
   skills.load(s.skills);
   shouts.load(s.shouts);
+  huntsWon = Math.max(0, s.hunts | 0);
   quests.load(s.quests);
   Object.assign(visited, s.world?.visited);
   for (const key of s.world?.chests ?? []) world.chest(key)?.open(true);
@@ -390,6 +438,7 @@ function tick(dt, controls) {
   if (session.role !== 'guest') {   // co-op guests mirror the host's enemies instead
     for (const c of creatures) c.tick(edt);
     dragon.tick(edt);
+    huntDragon.tick(edt);
   }
   projectiles.update(dt);
   shouts.update(dt);
@@ -438,6 +487,7 @@ function frame(now) {
   player.render(alpha, renderPos);
   for (const c of creatures) c.render(alpha);
   dragon.render(alpha);
+  huntDragon.render(alpha);
   for (const c of chests) c.update(dt);
   for (const d of Object.values(dungeons)) d.update(dt);
   if (playing) fx.update(dt * (shouts.timeScale < 1 ? 0.6 : 1));
@@ -452,6 +502,7 @@ function frame(now) {
   let obj = started ? quests.active() : null;
   let mark = null;
   const inDungeon = player.level !== valley;
+  if (huntDragon.alive) obj = { name: 'Dragon hunt', text: `Slay the ${huntDragon.name}`, target: { level: valley, pos: huntDragon.pos } };
   if (obj?.target) {
     if (obj.target.level === player.level) mark = obj.target.pos;
     else mark = inDungeon ? player.level.exit : entrances[obj.target.level.key].front;
@@ -465,8 +516,10 @@ function frame(now) {
   hud.setShout(shouts);
   hud.setBow(player);
   hud.setSlow(shouts.slowLeft > 0 || (session.role === 'guest' && session.mirror.slow));
-  if (session.role === 'guest' && dragon.state === 'soul' && Math.random() < 0.5) fx.soul({ x: dragon.pos.x, y: dragon.pos.y + 2, z: dragon.pos.z }, player.pos, 2);
-  hud.setBoss(dragon.alive && player.level === valley ? dragon : null);
+  if (session.role === 'guest') {
+    for (const d of [dragon, huntDragon]) if (d.state === 'soul' && Math.random() < 0.5) fx.soul({ x: d.pos.x, y: d.pos.y + 2, z: d.pos.z }, player.pos, 2);
+  }
+  hud.setBoss(player.level !== valley ? null : dragon.alive ? dragon : huntDragon.alive ? huntDragon : null);
 
   hud.frame(dt, player);
   renderer.render(scene, camera);
@@ -481,7 +534,7 @@ addEventListener('resize', () => {
 
 // Debug handle for testing in the console
 window.frostbound = {
-  player, creatures, dragon, entities, events, inventory, skills, shouts, quests, chests, dungeons, den, barrow,
+  player, creatures, dragon, huntDragon, entities, events, inventory, skills, shouts, quests, chests, dungeons, den, barrow,
   valley, entrances, interactables, projectiles, fx, save, menu, session, coopPanel,
   tpCam,
   go: (level, at, facing = 0) => { player.moveTo(level, at, facing); enterLevel(level, facing); },
