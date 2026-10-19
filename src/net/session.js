@@ -171,7 +171,7 @@ export class Session {
     switch (m.k) {
       case MSG.HELLO: {
         let why = null;
-        if (m.v !== VERSION) why = 'Your game version is different from the host\'s. Reload the page and try again';
+        if (m.v !== VERSION) why = 'Your game version is different from the host\'s. Both of you: open the Bag, tap ↻ to update, then try again';
         else if (this.count >= N.maxPlayers) why = `The room is full (${N.maxPlayers} players)`;
         if (why) { this.transport.send(from, { k: MSG.REJECT, msg: why }); setTimeout(() => this.transport?.kick(from), 300); return; }
         const name = String(m.name ?? 'Traveller').slice(0, 16);

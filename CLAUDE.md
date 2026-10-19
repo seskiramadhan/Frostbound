@@ -137,6 +137,7 @@ src/
                        # skills, shouts, projectiles (arrows), magic (fire), stealth
                        # (meter, witnesses), quests, dialogue, save
   ui/                  # hud, menu (Bag: Items/Shouts/Skills/Quests/Co-op), dialog, coop panel
+  version.js, updater.js # build number + update check; one-click update past the cache
   net/                 # transport (interface) + peerTransport, protocol, session,
                        # remoteBody (host side), mirror (guest side)
   audio.js             # Web Audio: procedural SFX + music (audio/music/, local/ override)
@@ -185,6 +186,9 @@ src/
 - **Always open a pull request into `master`** after pushing work to a branch.
   Don't ask first: the user wants a PR every time. If a PR from that branch
   is already open, push to it instead of opening a second one.
+- **Bump the build number in every PR that changes game files:** `BUILD` in `src/version.js`
+  and `"build"` in `version.json` (same number). Players then see "new version available"
+  and the Bag's ↻ button fetches it past the browser cache (`src/updater.js`).
 - The user merges PRs. Merging into `master` triggers the GitHub Pages deploy
   (https://seskiramadhan.github.io/Frostbound/), so unmerged work is not live.
 - Give the user the PR link at the end of every change.

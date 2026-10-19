@@ -34,6 +34,8 @@ import { Hud } from './ui/hud.js';
 import { Menu } from './ui/menu.js';
 import { CoopPanel } from './ui/coop.js';
 import { Session } from './net/session.js';
+import { BUILD, checkUpdate } from './version.js';
+import { updateGame } from './updater.js';
 
 const R = CONFIG.render;
 const $ = id => document.getElementById(id);
@@ -575,6 +577,7 @@ function startGame(lock = true) {
   if (!started) {
     started = true;
     if (!quests.has('howlingDen')) quests.start('arrival');   // new game: meet the Jarl first
+    setTimeout(updateNotice, 1500);
   }
   if (IS_TOUCH) {
     hud.showOverlay(false);
@@ -673,6 +676,31 @@ input.onMenu = () => (menu.open ? closeMenu() : openMenu());
 input.onEscape = () => (dialog.open ? dialog.close() : closeMenu());
 menu.onClose = closeMenu;
 input.onLockChange = locked => { if (!menu.open && !dialog.open) hud.showOverlay(!locked); };
+
+// ---- Updates: one button fetches the newest version past the browser cache ----
+function runUpdate(btn) {
+  btn.textContent = 'Updating…';
+  btn.disabled = true;
+  save();
+  updateGame();
+}
+$('build').textContent = `Build ${BUILD}`;
+$('menu-update').addEventListener('click', e => runUpdate(e.currentTarget));
+$('update-now').addEventListener('click', e => { e.stopPropagation(); runUpdate(e.currentTarget); });
+let updateReady = false, updateToast = false;
+function updateNotice() {
+  if (!updateReady || !started || updateToast) return;
+  updateToast = true;
+  hud.toast('A new version is out: open the Bag and tap ↻ to update');
+}
+async function pollUpdate() {
+  if (!(await checkUpdate()).newer) return;
+  updateReady = true;
+  $('update-now').style.display = 'inline-block';
+  updateNotice();
+}
+pollUpdate();
+setInterval(pollUpdate, 10 * 60 * 1000);
 
 addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 addEventListener('pagehide', save);

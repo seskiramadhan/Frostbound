@@ -51,6 +51,13 @@ fights harder), then victory: ending card, sunny valley, villagers say "Dragonbo
 - Co-op: protocol v5 (pose flags 4 = crouched, 8 = spell mode). Guests' sneak attacks are multiplied
   on the guest; the host doesn't multiply again. Other players' Flames are drawn; their firebolts are not.
 
+**Updates without clearing the cache:** the Bag has a ↻ button that re-downloads every game
+file (following the imports from `src/main.js`, `fetch(..., { cache: 'reload' })`) and reloads,
+keeping the save. The start screen shows "New version available" when `version.json` has a
+higher build than `src/version.js` `BUILD` (checked on load and every 10 min), and shows
+"Build N" at the bottom. **Bump both numbers in every PR.** Build 2 = this feature.
+Devices still on build 1 or older need one last manual refresh/cache clear to get the button.
+
 ## Plan agreed with the user: 3 rounds, user tests after each
 1. **Round 1 (done, merged):** announcement fix + co-op N3 dragon hunts.
    User tests: co-op fight + a hunt with a friend, solo dragon difficulty, phone FPS.
