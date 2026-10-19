@@ -4,25 +4,26 @@ import { SKILL_IDS } from '../systems/skills.js';
 import { SHOUT_IDS } from '../systems/shouts.js';
 
 const $ = id => document.getElementById(id);
-const TYPE_NAMES = { weapon: 'Weapons', bow: 'Bows', armor: 'Apparel', potion: 'Potions', misc: 'Misc' };
+const TYPE_NAMES = { weapon: 'Weapons', bow: 'Bows', armor: 'Apparel', potion: 'Potions', misc: 'Misc', quest: 'Quest items' };
 
 function stat(def) {
   if (def.type === 'weapon' || def.type === 'bow') return `Damage ${def.damage}`;
   if (def.type === 'armor') return `Armor ${def.armor}`;
   if (def.type === 'potion') return `Restores ${def.heal} health`;
+  if (def.type === 'quest') return 'Quest item';
   return `Value ${def.value}`;
 }
 
 export class Menu {
-  constructor(inventory, skills, player, shouts, coop) {
+  constructor(inventory, skills, player, shouts, coop, quests) {
     this.inventory = inventory;
     this.skills = skills;
     this.player = player;
     this.shouts = shouts;
     this.coop = coop;
+    this.quests = quests;
     this.el = $('menu');
     this.list = $('menu-list');
-    this.goldEl = $('menu-gold');
     this.tab = 'items';
     this.open = false;
 
@@ -41,9 +42,9 @@ export class Menu {
 
   render() {
     for (const b of document.querySelectorAll('#menu .tab')) b.classList.toggle('on', b.dataset.tab === this.tab);
-    this.goldEl.textContent = `${this.inventory.gold} gold`;
     this.list.innerHTML = '';
     if (this.tab === 'items') this.#renderItems();
+    else if (this.tab === 'quests') this.#renderQuests();
     else if (this.tab === 'shouts') this.#renderShouts();
     else if (this.tab === 'coop') this.coop.render(this.list, () => this.open && this.render());
     else this.#renderSkills();
@@ -58,6 +59,7 @@ export class Menu {
 
   #renderItems() {
     const inv = this.inventory;
+    this.#row('m-gold').textContent = `${inv.gold} gold`;
     for (const g of inv.grouped()) {
       this.#row('m-head').textContent = TYPE_NAMES[g.type];
       for (const e of g.entries) {
@@ -68,13 +70,33 @@ export class Menu {
         info.className = 'm-stat';
         info.textContent = e.equipped ? `${stat(e.def)} · Equipped` : stat(e.def);
         r.append(name, info);
-        if (e.def.type !== 'misc' && !e.equipped) {
+        if (e.def.type !== 'misc' && e.def.type !== 'quest' && !e.equipped) {
           r.classList.add('usable');
           r.addEventListener('click', () => { inv.use(e.id, this.player); this.render(); });
         }
       }
     }
     this.#row('m-hint').textContent = 'Tap an item to equip or drink it.';
+  }
+
+  #renderQuests() {
+    const list = this.quests.list();
+    if (!list.length) { this.#row('m-hint').textContent = 'No quests yet.'; return; }
+    let head = null;
+    for (const q of list) {
+      const h = q.done ? 'Completed' : q.main ? 'Main quest' : 'Side quests';
+      if (h !== head) { this.#row('m-head').textContent = h; head = h; }
+      const r = this.#row('m-item' + (q.tracked ? ' equipped' : '') + (q.done ? ' q-done' : ' usable'));
+      const name = document.createElement('span'); name.textContent = q.name;
+      const info = document.createElement('span'); info.className = 'm-stat';
+      info.textContent = q.done ? 'Done' : q.tracked ? 'Tracked' : '';
+      r.append(name, info);
+      if (!q.done) {
+        r.addEventListener('click', () => { this.quests.track(q.id); this.render(); });
+        this.#row('m-hint m-desc').textContent = q.text;
+      }
+    }
+    this.#row('m-hint').textContent = 'Tap a quest to track it on screen.';
   }
 
   #renderShouts() {

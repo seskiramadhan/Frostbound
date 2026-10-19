@@ -6,7 +6,7 @@ import { mulberry32 } from './noise.js';
 const P = CONFIG.props;
 
 // Merge simple geometries into one non-indexed geometry with a flat colour per part.
-function mergeColored(parts) {
+export function mergeColored(parts) {
   const pos = [], nor = [], col = [];
   const c = new THREE.Color();
   for (const { geo, color } of parts) {

@@ -1,12 +1,23 @@
 // Quests as ordered steps. Each step's done(world) is checked every tick, so doing
 // things out of order (looting before the kill) can't get a quest stuck.
-// Emits 'questStarted', 'questStep' and 'questDone'. Phase 5 adds a quest log on top of this.
+// Emits 'questStarted', 'questStep' and 'questDone'.
+// Save compatibility: only ever APPEND steps to an existing quest (step indices are saved).
 import { CONFIG } from '../config.js';
+
+const V = CONFIG.village;
+const jarl = w => ({ level: w.valley, pos: w.npc('jarl') });
 
 // target(world) returns { level, pos } for the objective marker, or null.
 export const QUESTS = {
+  arrival: {
+    name: 'The Jarl\'s Summons', main: true,
+    steps: [
+      { text: 'Speak with Jarl Hrolf in Frosthollow', done: w => w.flags.metJarl, target: jarl },
+    ],
+    reward: () => {},
+  },
   howlingDen: {
-    name: 'The Howling Den',
+    name: 'The Howling Den', main: true,
     steps: [
       { text: 'Find Frostfang Den', done: w => w.visited.den,
         target: w => ({ level: w.valley, pos: w.entrances.den.front }) },
@@ -14,11 +25,12 @@ export const QUESTS = {
         target: w => ({ level: w.den, pos: w.alpha.pos }) },
       { text: 'Claim the den\'s treasure', done: w => w.chest('den.denTreasure').opened,
         target: w => ({ level: w.den, pos: w.chest('den.denTreasure').pos }) },
+      { text: 'Report to Jarl Hrolf', done: w => w.flags.reportedDen, target: jarl },
     ],
     reward: w => w.inventory.addGold(CONFIG.loot.questReward),
   },
   dragonRising: {
-    name: 'Dragon Rising',
+    name: 'Dragon Rising', main: true,
     steps: [
       { text: 'Explore Bleakrock Barrow', done: w => w.visited.barrow,
         target: w => ({ level: w.valley, pos: w.entrances.barrow.front }) },
@@ -26,8 +38,48 @@ export const QUESTS = {
         target: w => ({ level: w.barrow, pos: w.barrow.wordWall.pos }) },
       { text: 'Slay the dragon', done: w => w.dragon.state === 'dead',
         target: w => (w.dragon.active ? { level: w.valley, pos: w.dragon.pos } : null) },
+      { text: 'Report to Jarl Hrolf', done: w => w.flags.reportedDragon, target: jarl },
     ],
     reward: w => w.inventory.addGold(CONFIG.loot.dragonReward),
+  },
+
+  // Side quests, given by villagers
+  hunterPelts: {
+    name: 'Pelts for the Hunter',
+    steps: [
+      { text: `Collect ${V.peltsWanted} wolf pelts`, done: w => w.inventory.count('wolfPelt') >= V.peltsWanted || w.flags.peltsGiven,
+        target: () => null },
+      { text: 'Bring the pelts to Ulf the Hunter', done: w => w.flags.peltsGiven,
+        target: w => ({ level: w.valley, pos: w.npc('hunter') }) },
+    ],
+    reward: w => w.inventory.addGold(V.rewards.pelts),
+  },
+  ancestorBlade: {
+    name: 'The Ancestor\'s Blade',
+    steps: [
+      { text: 'Find the Ancestor\'s Blade in Bleakrock Barrow', done: w => w.inventory.count('ancestorBlade') > 0 || w.flags.bladeGiven,
+        target: w => ({ level: w.barrow, pos: w.chest('barrow.barrowCrypt').pos }) },
+      { text: 'Return the blade to Old Sven', done: w => w.flags.bladeGiven,
+        target: w => ({ level: w.valley, pos: w.npc('sven') }) },
+    ],
+    reward: w => { w.inventory.addGold(V.rewards.blade); w.inventory.add('healPotion', 2); },
+  },
+  jarlLetter: {
+    name: 'A Letter for the Jarl',
+    steps: [
+      { text: 'Deliver Bera\'s letter to Jarl Hrolf', done: w => w.flags.letterDelivered, target: jarl },
+    ],
+    reward: w => w.inventory.addGold(V.rewards.letter),
+  },
+  silenceBarrow: {
+    name: 'Silence the Barrow',
+    steps: [
+      { text: 'Slay the Draugr Wight in Bleakrock Barrow', done: w => !w.wight.alive,
+        target: w => ({ level: w.barrow, pos: w.wight.pos }) },
+      { text: 'Tell Bera the barrow is quiet', done: w => w.flags.barrowReported,
+        target: w => ({ level: w.valley, pos: w.npc('innkeeper') }) },
+    ],
+    reward: w => w.inventory.addGold(V.rewards.barrow),
   },
 };
 
@@ -35,12 +87,14 @@ export class Quests {
   constructor(events, world) {
     this.events = events;
     this.world = world;
-    this.state = {};   // id -> { step, done }
+    this.state = {};      // id -> { step, done }
+    this.tracked = null;  // quest shown on the HUD (null = first active main quest)
   }
 
   start(id) {
     if (this.state[id]) return;
     this.state[id] = { step: 0, done: false };
+    if (!QUESTS[id].main) this.tracked = id;   // a newly taken side quest gets tracked
     this.events.emit('questStarted', { id, name: QUESTS[id].name, text: QUESTS[id].steps[0].text });
   }
 
@@ -51,6 +105,7 @@ export class Quests {
         st.step++;
         if (st.step >= q.steps.length) {
           st.done = true;
+          if (this.tracked === id) this.tracked = null;
           q.reward(this.world);
           this.events.emit('questDone', { id, name: q.name });
         } else {
@@ -60,7 +115,10 @@ export class Quests {
     }
   }
 
+  has(id) { return !!this.state[id]; }
   isDone(id) { return !!this.state[id]?.done; }
+  isActive(id) { return !!this.state[id] && !this.state[id].done; }
+  step(id) { return this.state[id]?.step ?? -1; }
 
   // Text of the current step of an active quest, or null.
   stepText(id) {
@@ -68,22 +126,38 @@ export class Quests {
     return st && !st.done ? QUESTS[id].steps[st.step].text : null;
   }
 
-  // The first unfinished quest's current objective: { name, text, target } or null.
-  active() {
-    for (const [id, st] of Object.entries(this.state)) {
-      if (st.done) continue;
-      const q = QUESTS[id], step = q.steps[st.step];
-      return { name: q.name, text: step.text, target: step.target(this.world) };
-    }
-    return null;
+  track(id) { if (this.isActive(id)) this.tracked = id; }
+
+  // For the quest log: [{ id, name, main, done, text, tracked }], active first.
+  list() {
+    const cur = this.#current();
+    return Object.entries(this.state).map(([id, st]) => ({
+      id, name: QUESTS[id].name, main: !!QUESTS[id].main, done: st.done,
+      text: st.done ? 'Completed' : QUESTS[id].steps[st.step].text, tracked: id === cur,
+    })).sort((a, b) => (a.done - b.done) || (b.main - a.main));
   }
 
-  toJSON() { return this.state; }
+  #current() {
+    if (this.tracked && this.isActive(this.tracked)) return this.tracked;
+    const active = Object.keys(this.state).filter(id => this.isActive(id));
+    return active.find(id => QUESTS[id].main) ?? active[0] ?? null;
+  }
+
+  // The tracked (or first main) unfinished quest's objective: { name, text, target } or null.
+  active() {
+    const id = this.#current();
+    if (!id) return null;
+    const q = QUESTS[id], step = q.steps[this.state[id].step];
+    return { name: q.name, text: step.text, target: step.target(this.world) };
+  }
+
+  toJSON() { return { ...this.state, _tracked: this.tracked }; }
 
   load(data) {
     if (!data) return;
     for (const [id, st] of Object.entries(data)) {
       if (QUESTS[id]) this.state[id] = { step: Math.min(st.step | 0, QUESTS[id].steps.length - 1), done: !!st.done };
     }
+    if (typeof data._tracked === 'string' && QUESTS[data._tracked]) this.tracked = data._tracked;
   }
 }

@@ -106,7 +106,7 @@ competitive PvP, matchmaking, accounts/servers that cost money.
 3. ✅ **First quest:** one dungeon, loot + inventory, skill leveling, save/load
 4. ✅ **Dragons:** dragon AI + fight, word walls, the 3 shouts (+ bow, Archery)
 5. ⬜ **Full game:** village + NPCs, main + side quests, final boss, post-game, audio, polish
-   (split into 5a village, 5b quests, 5c boss/ending/post-game, 5d audio/polish; see NEXT.md)
+   (✅ 5a village + 5b quests; ⬜ 5c boss/ending/post-game; ⬜ 5d audio/polish; see NEXT.md)
 
 Co-op phases slot in between:
 - ✅ **N1:** transport + lobby (room code / `?join=`), see each other move
@@ -126,12 +126,12 @@ src/
   input.js             # keyboard/mouse + touch -> one command object per tick
   camera.js            # third-person orbit camera (pulls in at walls, shake)
   world/               # terrain, props, environment (fog/light/snow), dungeon (ASCII maps,
-                       # entrances, word walls), chest, fx (pooled particles)
+                       # entrances, word walls), village (Frosthollow), chest, fx (particles)
   entities/            # player, creature (wolf/draugr AI) + wolfModel/draugrModel,
-                       # dragon, remotePlayer (co-op), model (shared helpers)
+                       # dragon, npc (villagers), remotePlayer (co-op), model (helpers)
   systems/             # events, entities (id registry), physics, combat, inventory,
-                       # skills, shouts, projectiles (arrows), quests, save
-  ui/                  # hud, menu (Bag: Items/Shouts/Skills/Co-op), coop panel
+                       # skills, shouts, projectiles (arrows), quests, dialogue, save
+  ui/                  # hud, menu (Bag: Items/Shouts/Skills/Quests/Co-op), dialog, coop panel
   net/                 # transport (interface) + peerTransport, protocol, session,
                        # remoteBody (host side), mirror (guest side)
   audio.js             # (Phase 5d) Web Audio procedural sounds
@@ -149,6 +149,9 @@ src/
 - **Hits/deaths go through the event bus** (`attack`, `areaAttack`, `damage`, `blocked`,
   `death`, each with `source`: melee/arrow/shout). Skills, HUD, loot and co-op listen.
 - **Quests** are ordered steps with `done(world)` checked every tick (no stuck quests).
+  Only ever **append** steps to an existing quest (step indices are saved). Story switches
+  set in conversations live in `flags` (saved). NPC lines are in `systems/dialogue.js`.
+- **Colliders** are circles `{x, z, r}` or axis-aligned boxes `{x, z, hw, hd}` (buildings).
 - **Saves** are versioned (`frostbound.save.v1`); keep old saves loading when adding data.
 - **Co-op:** host authoritative; guests mirror enemies and forward hits/shouts
   (`combat.forwardHit`, `shouts.forward`); host applies guests' damage via `RemoteBody`.

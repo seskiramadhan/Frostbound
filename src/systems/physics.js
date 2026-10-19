@@ -25,14 +25,32 @@ function moveAxis(body, dx, dz, level, maxClimb) {
   p.x = nx; p.z = nz;
 }
 
+// Colliders are circles { x, z, r } or axis-aligned boxes { x, z, hw, hd } (buildings).
 export function pushOutOfColliders(pos, r, colliders) {
   for (const c of colliders) {
+    if (c.hw !== undefined) { pushOutOfBox(pos, r, c); continue; }
     const dx = pos.x - c.x, dz = pos.z - c.z, min = c.r + r;
     if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
     const d = Math.hypot(dx, dz);
     if (d >= min || d === 0) continue;
     pos.x = c.x + dx / d * min;
     pos.z = c.z + dz / d * min;
+  }
+}
+
+function pushOutOfBox(pos, r, c) {
+  const dx = pos.x - c.x, dz = pos.z - c.z;
+  if (Math.abs(dx) > c.hw + r || Math.abs(dz) > c.hd + r) return;
+  const cx = Math.max(-c.hw, Math.min(c.hw, dx)), cz = Math.max(-c.hd, Math.min(c.hd, dz));
+  const ox = dx - cx, oz = dz - cz, d = Math.hypot(ox, oz);
+  if (d > 0) {                      // outside the box: push away from the nearest point
+    if (d >= r) return;
+    pos.x = c.x + cx + ox / d * r;
+    pos.z = c.z + cz + oz / d * r;
+  } else if (c.hw - Math.abs(dx) < c.hd - Math.abs(dz)) {   // inside: leave by the closest side
+    pos.x = c.x + Math.sign(dx || 1) * (c.hw + r);
+  } else {
+    pos.z = c.z + Math.sign(dz || 1) * (c.hd + r);
   }
 }
 

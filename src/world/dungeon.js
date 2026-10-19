@@ -48,7 +48,7 @@ export const BLEAKROCK_BARROW = {
   key: 'barrow',
   origin: [1200, 0, 1000],
   spawns: { d: 'draugr', D: 'draugrWight' },
-  chests: { c: 'barrowHall' },
+  chests: { c: 'barrowHall', k: 'barrowCrypt' },
   wordWall: { shout: 'push', facing: Math.PI },
   palette: { floor: 0x57595b, wall: 0x6c7074, ceiling: 0x45484c },
   roughness: 0.22,          // worked stone, not raw cave
@@ -66,7 +66,7 @@ export const BLEAKROCK_BARROW = {
     '####.....c.....####',
     '########...########',
     '########...########',
-    '#####.........#####',
+    '#####k........#####',
     '#####.t.....t.#####',
     '#####....D....#####',
     '#####...d.....#####',
