@@ -1,15 +1,17 @@
-// HUD: start overlay, health/stamina bars, enemy bar, hurt flash, death screen, FPS counter.
+// HUD: start overlay, health/stamina bars, enemy bar, hurt flash, death screen,
+// objective + quest marker, interact prompt, messages, fade, FPS counter.
+import * as THREE from 'three';
 import { IS_TOUCH } from '../config.js';
 
 const $ = id => document.getElementById(id);
+const v = new THREE.Vector3();
 
 export class Hud {
   constructor() {
     this.overlay = $('overlay');
     this.fpsEl = $('fps');
     $(IS_TOUCH ? 'help-desktop' : 'help-touch').remove();
-    $('cta').textContent = IS_TOUCH ? 'Tap to begin' : 'Click to begin';
-    if (!IS_TOUCH) $('btn-jump').remove();
+    if (!IS_TOUCH) for (const id of ['btn-jump', 'btn-interact', 'btn-bag']) $(id).remove();
 
     this.hpBar = $('hp');
     this.stBar = $('st');
@@ -20,11 +22,28 @@ export class Hud {
     this.hurtEl = $('hurt');
     this.deathEl = $('death');
     this.deathCta = $('death-cta');
+    this.questName = $('q-name');
+    this.questText = $('q-text');
+    this.objective = $('objective');
+    this.toasts = $('toasts');
+    this.notice = $('notice');
+    this.promptEl = $('prompt');
+    this.interactBtn = $('btn-interact');
+    this.markerEl = $('marker');
+    this.markerDist = $('marker-dist');
+    this.fadeEl = $('fade');
 
     this.target = null;
     this.targetTime = 0;
+    this.noticeTime = 0;
+    this.lastPrompt = null;
     this.frames = 0;
     this.acc = 0;
+  }
+
+  setStartText(hasSave) {
+    $('cta').textContent = `${IS_TOUCH ? 'Tap' : 'Click'} to ${hasSave ? 'continue' : 'begin'}`;
+    $('newgame').style.display = hasSave ? 'inline-block' : 'none';
   }
 
   showOverlay(show) {
@@ -48,6 +67,66 @@ export class Hud {
     this.deathCta.textContent = '';
   }
 
+  // Small message, top left (loot, "quest started").
+  toast(text) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = text;
+    this.toasts.appendChild(el);
+    while (this.toasts.children.length > 5) this.toasts.firstChild.remove();
+    setTimeout(() => el.classList.add('out'), 3500);
+    setTimeout(() => el.remove(), 4200);
+  }
+
+  // Big centred message (skill up, quest done).
+  announce(title, sub = '') {
+    this.notice.innerHTML = '';
+    const t = document.createElement('div'); t.className = 'n-title'; t.textContent = title;
+    const s = document.createElement('div'); s.className = 'n-sub'; s.textContent = sub;
+    this.notice.append(t, s);
+    this.notice.classList.add('on');
+    this.noticeTime = 3;
+  }
+
+  setObjective(obj) {
+    this.objective.style.display = obj ? 'block' : 'none';
+    if (!obj) return;
+    if (this.questName.textContent !== obj.name) this.questName.textContent = obj.name;
+    if (this.questText.textContent !== obj.text) this.questText.textContent = obj.text;
+  }
+
+  setPrompt(label) {
+    if (label === this.lastPrompt) return;
+    this.lastPrompt = label;
+    this.promptEl.style.display = label ? 'block' : 'none';
+    this.promptEl.textContent = label ? (IS_TOUCH ? label : `E  ${label}`) : '';
+    if (this.interactBtn) this.interactBtn.style.display = label ? 'block' : 'none';
+  }
+
+  // Diamond over the objective (clamped to the screen edge when off-screen).
+  setMarker(pos, camera, from) {
+    if (!pos) { this.markerEl.style.display = 'none'; return; }
+    v.set(pos.x, pos.y + 2.2, pos.z).project(camera);
+    let x = v.x, y = v.y;
+    if (v.z > 1) { x = -x; y = -y; }              // behind the camera: mirror
+    const edge = v.z > 1 || Math.abs(x) > 0.92 || Math.abs(y) > 0.88;
+    if (edge) {
+      const k = Math.max(Math.abs(x) / 0.92, Math.abs(y) / 0.88, 1e-6);
+      x /= k; y /= k;
+      if (v.z > 1) y = Math.min(y, -0.6);         // behind: hug the bottom half
+    }
+    this.markerEl.style.display = 'block';
+    this.markerEl.style.transform = `translate(${(x * 0.5 + 0.5) * innerWidth}px, ${(-y * 0.5 + 0.5) * innerHeight}px)`;
+    this.markerDist.textContent = `${Math.round(Math.hypot(pos.x - from.x, pos.z - from.z))}m`;
+  }
+
+  // Fade to black, run fn, fade back in.
+  fade(fn, time) {
+    this.fadeEl.style.transition = `opacity ${time}s`;
+    this.fadeEl.style.opacity = 1;
+    setTimeout(() => { fn(); this.fadeEl.style.opacity = 0; }, time * 1000);
+  }
+
   frame(dt, player) {
     this.hpBar.style.transform = `scaleX(${player.hp / player.maxHp})`;
     this.stBar.style.transform = `scaleX(${player.stamina / player.maxStamina})`;
@@ -61,6 +140,8 @@ export class Hud {
       if (this.targetTime <= 0) this.target = null;
     }
     this.targetWrap.style.opacity = this.target ? 1 : 0;
+
+    if (this.noticeTime > 0 && (this.noticeTime -= dt) <= 0) this.notice.classList.remove('on');
 
     if (player.canRespawn && !this.deathCta.textContent) {
       this.deathCta.textContent = IS_TOUCH ? 'Tap the right side to rise again' : 'Click to rise again';

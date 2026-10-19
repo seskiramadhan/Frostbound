@@ -1,20 +1,22 @@
 // Wolves hunt in packs: wander -> chase -> windup -> bite -> recover, and give up
-// (return home) when dragged too far. Dead wolves respawn at the den after a while.
+// (return home) when dragged too far. Valley wolves respawn after a while; dungeon
+// wolves (and the alpha) stay dead.
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { box, blobShadow, Flash, lerpAngle, clamp01 } from './model.js';
-import { moveBody, pushOutOfColliders, clampToWorld, settleOnGround, turnToward } from '../systems/physics.js';
+import { moveBody, pushOutOfColliders, settleOnGround, turnToward } from '../systems/physics.js';
 import { mulberry32 } from '../world/noise.js';
 
 const W = CONFIG.wolf, CB = CONFIG.combat;
 const rand = mulberry32(9001);
 const range = ([a, b]) => a + rand() * (b - a);
 
-function buildModel() {
+function buildModel(cfg) {
   const root = new THREE.Group();
   const body = new THREE.Group();
+  body.scale.setScalar(cfg.scale);
   root.add(body);
-  const fur = 0x8c9096, light = 0xb9bec4, dark = 0x55595f;
+  const fur = cfg.fur, light = 0xb9bec4, dark = 0x55595f;
 
   body.add(box(0.42, 0.42, 1.05, fur, 0, 0.78, -0.05));       // torso
   body.add(box(0.52, 0.52, 0.42, light, 0, 0.84, 0.32));      // ruff
@@ -39,13 +41,17 @@ function buildModel() {
     return pivot;
   });
 
-  return { root, body, head, legs, shadow: blobShadow(0.6) };
+  return { root, body, head, legs, shadow: blobShadow(0.6 * cfg.scale) };
 }
 
 export class Wolf {
-  constructor(scene, terrain, colliders, events, entities, home, pack) {
-    this.terrain = terrain;
-    this.colliders = colliders;
+  // opts: { cfg (overrides on CONFIG.wolf), key (stable save id), respawns, spread }
+  constructor(scene, level, events, entities, home, pack, opts = {}) {
+    this.cfg = { ...W, ...opts.cfg };
+    this.key = opts.key ?? null;
+    this.respawns = opts.respawns ?? true;
+    this.spread = opts.spread ?? this.cfg.packSpread;
+    this.level = level;
     this.events = events;
     this.entities = entities;
     this.home = home;
@@ -53,25 +59,25 @@ export class Wolf {
 
     this.kind = 'wolf';
     this.team = 'beast';
-    this.name = W.name;
-    this.radius = W.radius;
-    this.maxHp = W.maxHealth;
+    this.name = this.cfg.name;
+    this.radius = this.cfg.radius;
+    this.maxHp = this.cfg.maxHealth;
 
     this.pos = new THREE.Vector3();
     this.prevPos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
     this.wanderTo = new THREE.Vector3();
 
-    this.model = buildModel();
+    this.model = buildModel(this.cfg);
     this.flash = new Flash(this.model.root);
     scene.add(this.model.root, this.model.shadow);
     this.respawn();
   }
 
   respawn() {
-    const a = rand() * Math.PI * 2, r = rand() * W.packSpread;
+    const a = rand() * Math.PI * 2, r = rand() * this.spread;
     const x = this.home.x + Math.cos(a) * r, z = this.home.z + Math.sin(a) * r;
-    this.pos.set(x, this.terrain.heightAt(x, z), z);
+    this.pos.set(x, this.level.heightAt(x, z), z);
     this.prevPos.copy(this.pos);
     this.vel.set(0, 0, 0);
     this.vy = 0;
@@ -83,7 +89,7 @@ export class Wolf {
     this.target = null;
     this.state = 'wander';
     this.stateTime = 0;
-    this.timer = range(W.wanderPause);
+    this.timer = range(this.cfg.wanderPause);
     this.wanderTo.copy(this.pos);
     this.walkPhase = 0;
     this.speed = 0;
@@ -99,17 +105,17 @@ export class Wolf {
 
   // Nearest living player within range; packmates share their quarry.
   #acquire() {
-    const r = this.target ? W.loseRadius : W.detectRadius;
+    const r = this.target ? this.cfg.loseRadius : this.cfg.detectRadius;
     let best = null, bestD = r * r;
     for (const e of this.entities) {
-      if (e.team !== 'player' || !e.alive) continue;
+      if (e.team !== 'player' || !e.alive || e.level !== this.level) continue;
       const d = this.pos.distanceToSquared(e.pos);
-      if (d < bestD) { bestD = d; best = e; }
+      if (d < bestD && (this.target === e || this.level.lineOfSight(this.pos, e.pos))) { bestD = d; best = e; }
     }
     if (!best) {
       for (const m of this.pack) {
         const t = m !== this && m.alive && m.target;
-        if (t && t.alive && this.pos.distanceToSquared(t.pos) < W.loseRadius * W.loseRadius) return t;
+        if (t && t.alive && t.level === this.level && this.pos.distanceToSquared(t.pos) < this.cfg.loseRadius * this.cfg.loseRadius) return t;
       }
     }
     return best;
@@ -118,7 +124,7 @@ export class Wolf {
   #mayAttack() {
     let busy = 0;
     for (const m of this.pack) if (m !== this && m.alive && (m.state === 'windup' || m.state === 'bite')) busy++;
-    return busy < W.attackersAtOnce;
+    return busy < this.cfg.attackersAtOnce;
   }
 
   tick(dt) {
@@ -128,15 +134,15 @@ export class Wolf {
     this.stateTime += dt;
 
     if (!this.alive) {
-      if (this.stateTime > W.corpseTime) this.model.root.visible = this.model.shadow.visible = false;
-      if (this.stateTime > W.respawnTime) this.respawn();
+      if (this.stateTime > this.cfg.corpseTime) this.model.root.visible = this.model.shadow.visible = false;
+      if (this.respawns && this.stateTime > this.cfg.respawnTime) this.respawn();
       return;
     }
 
     const homeD = Math.hypot(this.pos.x - this.home.x, this.pos.z - this.home.z);
     if (this.state !== 'return') {
       this.target = this.#acquire();
-      if (homeD > W.leashRadius) { this.target = null; this.#setState('return'); }
+      if (homeD > this.cfg.leashRadius) { this.target = null; this.#setState('return'); }
     }
 
     let goal = null, speed = 0, face = null;
@@ -147,26 +153,26 @@ export class Wolf {
     switch (this.state) {
       case 'wander':
         if (tgt) { this.#setState('chase'); break; }
-        this.hp = Math.min(this.maxHp, this.hp + W.healRate * dt);
-        if (this.pos.distanceTo(this.wanderTo) > 0.8) { goal = this.wanderTo; speed = W.walkSpeed; }
+        this.hp = Math.min(this.maxHp, this.hp + this.cfg.healRate * dt);
+        if (this.pos.distanceTo(this.wanderTo) > 0.8) { goal = this.wanderTo; speed = this.cfg.walkSpeed; }
         else if ((this.timer -= dt) <= 0) {
-          const a = rand() * Math.PI * 2, r = rand() * W.wanderRadius;
+          const a = rand() * Math.PI * 2, r = rand() * this.cfg.wanderRadius;
           this.wanderTo.set(this.home.x + Math.cos(a) * r, 0, this.home.z + Math.sin(a) * r);
-          this.timer = range(W.wanderPause);
+          this.timer = range(this.cfg.wanderPause);
         }
         break;
       case 'chase':
         if (!tgt) { this.#setState('wander', 0); this.wanderTo.copy(this.pos); break; }
-        if (toT < W.circleRange && !this.#mayAttack()) {   // wait for a turn, circling a little
+        if (toT < this.cfg.circleRange && !this.#mayAttack()) {   // wait for a turn, circling a little
           face = faceT;
           const side = this.id % 2 ? 1 : -1, a = faceT + side * Math.PI / 2;
           this.wanderTo.set(this.pos.x + Math.sin(a) * 2, 0, this.pos.z + Math.cos(a) * 2);
-          if (toT < W.circleRange - 0.8) this.wanderTo.set(this.pos.x * 2 - tgt.pos.x, 0, this.pos.z * 2 - tgt.pos.z);
-          goal = this.wanderTo; speed = W.walkSpeed;
+          if (toT < this.cfg.circleRange - 0.8) this.wanderTo.set(this.pos.x * 2 - tgt.pos.x, 0, this.pos.z * 2 - tgt.pos.z);
+          goal = this.wanderTo; speed = this.cfg.walkSpeed;
           break;
         }
-        if (toT < W.attackRange) { this.#setState('windup', range(W.windup)); break; }
-        goal = tgt.pos; speed = W.runSpeed;
+        if (toT < this.cfg.attackRange) { this.#setState('windup', range(this.cfg.windup)); break; }
+        goal = tgt.pos; speed = this.cfg.runSpeed;
         break;
       case 'windup':
         face = faceT;
@@ -174,18 +180,18 @@ export class Wolf {
         else if (this.stateTime >= this.timer) this.#setState('bite');
         break;
       case 'bite':
-        if (this.stateTime < W.biteAt) {
-          this.vel.x = Math.sin(this.facing) * W.lungeSpeed;
-          this.vel.z = Math.cos(this.facing) * W.lungeSpeed;
+        if (this.stateTime < this.cfg.biteAt) {
+          this.vel.x = Math.sin(this.facing) * this.cfg.lungeSpeed;
+          this.vel.z = Math.cos(this.facing) * this.cfg.lungeSpeed;
         } else if (!this.struck) {
           this.struck = true;
-          this.events.emit('attack', { attacker: this, damage: W.biteDamage, reach: W.biteReach, arc: W.biteArc });
+          this.events.emit('attack', { attacker: this, damage: this.cfg.biteDamage, reach: this.cfg.biteReach, arc: this.cfg.biteArc });
         }
-        if (this.stateTime >= W.biteTime) this.#setState('recover', range(W.recover));
+        if (this.stateTime >= this.cfg.biteTime) this.#setState('recover', range(this.cfg.recover));
         break;
       case 'recover':
         face = faceT;
-        if (tgt && toT < W.attackRange * 1.4) {   // back off a little before the next bite
+        if (tgt && toT < this.cfg.attackRange * 1.4) {   // back off a little before the next bite
           this.vel.x -= Math.sin(this.facing) * 4 * dt;
           this.vel.z -= Math.cos(this.facing) * 4 * dt;
         }
@@ -195,8 +201,8 @@ export class Wolf {
         if (this.stateTime >= CB.stagger.enemy) this.#setState('chase');
         break;
       case 'return':
-        goal = this.home; speed = W.runSpeed;
-        if (homeD < 3) { this.hp = this.maxHp; this.#setState('wander', range(W.wanderPause)); this.wanderTo.copy(this.pos); }
+        goal = this.home; speed = this.cfg.runSpeed;
+        if (homeD < 3) { this.hp = this.maxHp; this.#setState('wander', range(this.cfg.wanderPause)); this.wanderTo.copy(this.pos); }
         break;
     }
 
@@ -207,19 +213,19 @@ export class Wolf {
       if (d > 0.01) { wx = dx / d * speed; wz = dz / d * speed; }
     }
     if (this.state !== 'bite') {
-      const k = Math.min(1, W.accel * dt);
+      const k = Math.min(1, this.cfg.accel * dt);
       this.vel.x += (wx - this.vel.x) * k;
       this.vel.z += (wz - this.vel.z) * k;
     }
 
-    moveBody(this, this.vel.x * dt, this.vel.z * dt, this.terrain, W.maxClimb);
-    pushOutOfColliders(this.pos, this.radius, this.colliders);
-    clampToWorld(this.pos, this.terrain, CONFIG.player.worldMargin);
-    settleOnGround(this, dt, this.terrain, CB.jump.gravity);
+    moveBody(this, this.vel.x * dt, this.vel.z * dt, this.level, this.cfg.maxClimb);
+    pushOutOfColliders(this.pos, this.radius, this.level.colliders);
+    this.level.clamp(this.pos);
+    settleOnGround(this, dt, this.level, CB.jump.gravity);
 
     const sp = Math.hypot(this.vel.x, this.vel.z);
     if (face === null && sp > 0.3 && this.state !== 'bite') face = Math.atan2(this.vel.x, this.vel.z);
-    if (face !== null) this.facing = turnToward(this.facing, face, W.turnSpeed * dt);
+    if (face !== null) this.facing = turnToward(this.facing, face, this.cfg.turnSpeed * dt);
     this.walkPhase += sp * dt * 2.6;
     this.speed = sp;
   }
@@ -240,13 +246,21 @@ export class Wolf {
     this.#setState('dead');
   }
 
+  // Loaded from a save: already dead, body gone.
+  removeForGood() {
+    this.die();
+    this.respawns = false;
+    this.stateTime = this.cfg.corpseTime + 1;
+    this.model.root.visible = this.model.shadow.visible = false;
+  }
+
   render(alpha) {
     const { root, body, head, legs, shadow } = this.model;
     if (!root.visible) return;
     const out = root.position.lerpVectors(this.prevPos, this.pos, alpha);
     root.rotation.y = lerpAngle(this.prevFacing, this.facing, alpha);
 
-    const run = Math.min(1, this.speed / W.walkSpeed * 0.6);
+    const run = Math.min(1, this.speed / this.cfg.walkSpeed * 0.6);
     const s = Math.sin(this.walkPhase) * run * 0.6;
     legs[0].rotation.x = s; legs[3].rotation.x = s;
     legs[1].rotation.x = -s; legs[2].rotation.x = -s;
@@ -273,12 +287,12 @@ export class Wolf {
         body.position.y = 0.4 * clamp01(t / 0.4) - 0.1;
         break;
     }
-    shadow.position.set(out.x, this.terrain.heightAt(out.x, out.z) + 0.05, out.z);
+    shadow.position.set(out.x, this.level.heightAt(out.x, out.z) + 0.05, out.z);
   }
 }
 
 // Place a pack at a walkable spot ~packDistance from the player's spawn.
-export function spawnWolfPack(scene, terrain, colliders, events, entities) {
+export function spawnWolfPack(scene, terrain, events, entities) {
   const [sx, sz] = CONFIG.player.spawn;
   let home = null;
   for (let i = 0; i < 24 && !home; i++) {
@@ -290,9 +304,26 @@ export function spawnWolfPack(scene, terrain, colliders, events, entities) {
 
   const pack = [];
   for (let i = 0; i < W.packSize; i++) {
-    const w = new Wolf(scene, terrain, colliders, events, entities, home, pack);
+    const w = new Wolf(scene, terrain, events, entities, home, pack);
     entities.add(w);
     pack.push(w);
   }
   return pack;
+}
+
+// Dungeon wolves: one pack from the map's 'w' cells, plus the alpha on its own.
+export function spawnDungeonWolves(scene, dungeon, events, entities) {
+  const inside = { wanderRadius: 2, leashRadius: 30 };
+  const pack = [], alphaPack = [];
+  dungeon.wolves.forEach((home, i) => {
+    pack.push(entities.add(new Wolf(scene, dungeon, events, entities, home, pack,
+      { cfg: inside, key: `${dungeon.key}.wolf${i}`, respawns: false, spread: 0 })));
+  });
+  let alpha = null;
+  if (dungeon.alpha) {
+    alpha = entities.add(new Wolf(scene, dungeon, events, entities, dungeon.alpha, alphaPack,
+      { cfg: { ...CONFIG.alphaWolf, ...inside }, key: `${dungeon.key}.alpha`, respawns: false, spread: 0 }));
+    alphaPack.push(alpha);
+  }
+  return { wolves: [...pack, ...alphaPack], alpha };
 }

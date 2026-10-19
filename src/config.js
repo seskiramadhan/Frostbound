@@ -156,6 +156,78 @@ export const CONFIG = {
     recover: [1.0, 1.8],
     corpseTime: 8,         // seconds the body stays
     respawnTime: 30,
+    scale: 1,
+    fur: 0x8c9096,
+  },
+
+  // Overrides on top of `wolf` for the den's pack leader
+  alphaWolf: {
+    name: 'Alpha Wolf',
+    maxHealth: 110,
+    radius: 0.7,
+    scale: 1.35,
+    fur: 0x4d4f55,
+    runSpeed: 6.5,
+    biteDamage: 15,
+    biteReach: 1.9,
+    windup: [0.6, 0.9],
+    recover: [1.1, 1.7],
+    detectRadius: 14,
+  },
+
+  dungeon: {
+    origin: [1000, 0, 1000], // far outside the valley; fog hides everything else
+    cell: 3,               // metres per map tile
+    wallHeight: 5,
+    roughness: 0.55,       // how far wall vertices are pushed around
+    wallPad: 0.25,         // extra collision padding against rough walls
+    entranceDistance: 85,  // cave mouth distance from the player spawn
+    ambient: 0.32,         // baked light where no brazier reaches
+    braziers: { range: 13, intensity: 1.1 },
+    fog: { color: 0x0b0907, near: 5, far: 30 },
+    light: { hemiSky: 0x6a5a48, hemiGround: 0x1a1410, hemiIntensity: 1.3 },
+    torch: { color: 0xffb066, intensity: 18, distance: 16, height: 2.6 }, // light that follows the player
+  },
+
+  interact: {
+    radius: 2.6,
+    fadeTime: 0.35,        // seconds for fade to black on doors
+  },
+
+  // Item stats. type: weapon | armor | potion | misc
+  items: {
+    ironSword:   { name: 'Iron Sword', type: 'weapon', damage: 14, value: 25, color: 0xc9d0d8, length: 0.9 },
+    steelSword:  { name: 'Steel Sword', type: 'weapon', damage: 21, value: 70, color: 0xeef4fa, length: 1.05 },
+    clothes:     { name: 'Fur Clothes', type: 'armor', armor: 0, value: 5, color: 0x6b4c34 },
+    hideArmor:   { name: 'Hide Armor', type: 'armor', armor: 20, value: 40, color: 0x8a6440 },  // armor = % damage taken off
+    minorPotion: { name: 'Potion of Minor Healing', type: 'potion', heal: 35, value: 15 },
+    wolfPelt:    { name: 'Wolf Pelt', type: 'misc', value: 8 },
+    alphaPelt:   { name: 'Alpha Wolf Pelt', type: 'misc', value: 40 },
+  },
+
+  startInventory: { items: { ironSword: 1, clothes: 1, minorPotion: 1 }, gold: 0, weapon: 'ironSword', armor: 'clothes' },
+
+  loot: {
+    denHall:     { items: { hideArmor: 1, minorPotion: 1 }, gold: 15 },
+    denTreasure: { items: { steelSword: 1, minorPotion: 2 }, gold: 60 },
+    wolfDrop: 'wolfPelt',
+    alphaDrop: 'alphaPelt',
+    questReward: 50,       // gold for finishing the first quest
+  },
+
+  skills: {
+    maxLevel: 10,
+    xpBase: 4,             // xp from level L to L+1 = xpBase * xpGrowth^(L-1)
+    xpGrowth: 1.35,
+    oneHanded: { name: 'One-Handed', xpPerHit: 1, damagePerLevel: 0.06,
+      perk: { name: 'Armsman', desc: 'Sword damage +25%', damageMul: 1.25 } },
+    block: { name: 'Block', xpPerBlock: 1.5, reductionPerLevel: 0.01,
+      perk: { name: 'Shield Wall', desc: 'Blocking costs half stamina', staminaMul: 0.5 } },
+  },
+
+  save: {
+    key: 'frostbound.save.v1',
+    autosaveInterval: 30,  // seconds
   },
 
   camera: {
@@ -166,6 +238,8 @@ export const CONFIG = {
     startPitch: 0.3,
     follow: 10,            // position smoothing
     groundClearance: 0.6,
+    minDistance: 1.2,      // closest it gets when a wall is in the way
+    ceilingClearance: 0.5,
   },
 
   input: {
