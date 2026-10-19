@@ -41,11 +41,29 @@ export class Shouts {
     if (!this.ready || !player.alive) return false;
     const id = this.selected, def = SH[id];
     this.cooldown = this.cooldownMax = def.cooldown;
+    if (this.forward) { this.#fx(player, id, def); this.forward(id); }   // co-op guest: the host applies it
+    else this.apply(player, id);
+    this.events.emit('shout', { id, def });
+    return true;
+  }
+
+  // A shout's effect from `player` (the co-op host also runs this for guests' shouts).
+  apply(player, id) {
+    const def = SH[id];
+    if (!def) return;
+    this.#fx(player, id, def);
     if (id === 'push') this.#push(player, def);
     else if (id === 'fireBreath') this.#fire(player, def);
     else if (id === 'slowTime') this.slowLeft = def.duration;
-    this.events.emit('shout', { id, def });
-    return true;
+  }
+
+  #fx(player, id, def) {
+    const f = player.facing;
+    if (id === 'push') this.fx.shout(player.pos, f, def.range);
+    else if (id === 'fireBreath') {
+      const dir = { x: Math.sin(f), y: -0.05, z: Math.cos(f) };
+      this.fx.fire({ x: player.pos.x + dir.x, y: player.pos.y + 1.6, z: player.pos.z + dir.z }, dir, def.range, 60);
+    }
   }
 
   #targets(player) {
@@ -55,7 +73,6 @@ export class Shouts {
   }
 
   #push(player, def) {
-    this.fx.shout(player.pos, player.facing, def.range);
     for (const e of this.#targets(player)) {
       if (e.flying) {                         // a dragon in the air: reach further, ignore height
         const probe = { pos: { x: player.pos.x, y: e.pos.y, z: player.pos.z }, facing: player.facing };
@@ -69,8 +86,6 @@ export class Shouts {
   }
 
   #fire(player, def) {
-    const f = player.facing, dir = { x: Math.sin(f), y: -0.05, z: Math.cos(f) };
-    this.fx.fire({ x: player.pos.x + dir.x, y: player.pos.y + 1.6, z: player.pos.z + dir.z }, dir, def.range, 60);
     for (const e of this.#targets(player)) {
       if (inArc(player, e, def.range + e.radius, def.arc)) this.combat.applyHit(player, e, def.damage, 'shout');
     }

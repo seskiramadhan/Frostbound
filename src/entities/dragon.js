@@ -110,10 +110,11 @@ function buildModel() {
 }
 
 export class Dragon {
-  constructor(scene, level, events, fx) {
+  constructor(scene, level, events, fx, entities = null) {
     this.level = level;      // always the valley
     this.events = events;
     this.fx = fx;
+    this.entities = entities; // to pick the nearest player (co-op)
     this.kind = 'dragon';
     this.team = 'dragon';
     this.name = DR.name;
@@ -220,6 +221,7 @@ export class Dragon {
     this.flash.tick(dt);
     if (this.state === 'inactive') return;
     this.stateTime += dt;
+    if (this.entities && (this.retargetIn = (this.retargetIn ?? 0) - dt) <= 0) { this.retargetIn = 1.5; this.#retarget(); }
     const t = this.target, tp = t?.pos;
     const here = t && t.alive && t.level === this.level;   // can it see the player?
 
@@ -312,6 +314,17 @@ export class Dragon {
         break;
     }
     if (this.breathing > 0) this.breathing -= dt;
+  }
+
+  // Go after the nearest living player in the valley (keeps the current one if none).
+  #retarget() {
+    let best = null, bestD = Infinity;
+    for (const e of this.entities) {
+      if (e.team !== 'player' || !e.alive || e.level !== this.level) continue;
+      const d = (e.pos.x - this.pos.x) ** 2 + (e.pos.z - this.pos.z) ** 2;
+      if (d < bestD) { bestD = d; best = e; }
+    }
+    if (best) this.target = best;
   }
 
   #turn(want, k) {

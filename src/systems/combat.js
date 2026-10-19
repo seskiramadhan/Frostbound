@@ -19,6 +19,8 @@ export class Combat {
   constructor(events, entities) {
     this.events = events;
     this.entities = entities;
+    this.enemyDamageScale = 1;   // co-op host: < 1 so enemies take more hits with more players
+    this.forwardHit = null;      // co-op guest: (target, damage, source) => send to the host instead
     events.on('attack', a => this.#resolve(a));
     events.on('areaAttack', a => this.#resolveArea(a));
   }
@@ -41,7 +43,14 @@ export class Combat {
 
   applyHit(attacker, target, damage, source = 'melee') {
     const ev = this.events;
+    if (this.forwardHit && target.team !== 'player') {          // co-op guest: the host decides
+      this.forwardHit(target, damage, source);
+      ev.emit('damage', { target, attacker, amount: damage, source, forwarded: true });
+      return;
+    }
     const blocked = !!target.blocking && inArc(target, attacker, Infinity, B.arc);
+    if (target.remote) { target.hurt(damage, blocked, attacker); return; }   // another player: their game applies it
+    if (target.team !== 'player') damage *= this.enemyDamageScale;
     let amount = blocked ? damage * (1 - (target.blockReduction ?? B.reduction)) : damage;
     if (target.mitigate) amount = target.mitigate(amount);
     target.hp = Math.max(0, target.hp - amount);

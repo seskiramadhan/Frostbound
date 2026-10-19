@@ -355,6 +355,7 @@ export const CONFIG = {
     sendRate: 15,          // pose updates per second
     interpDelay: 0.12,     // remote players are drawn this far in the past, for smoothness
     joinTimeout: 15,       // seconds
+    enemyHealthPerPlayer: 0.5, // each extra player makes enemies take 50% more hits
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
   },
 

@@ -72,7 +72,7 @@ for (const d of Object.values(dungeons)) {
   creatures.push(...r.creatures);
   bosses[d.key] = r.boss;
 }
-const dragon = entities.add(new Dragon(scene, valley, events, fx));
+const dragon = entities.add(new Dragon(scene, valley, events, fx, entities));
 const chests = Object.values(dungeons).flatMap(d => d.chests.map(c => new Chest(scene, d, c.pos, c.lootKey, Math.PI)));
 const projectiles = new Projectiles(scene, entities, combat);
 const tpCam = new ThirdPersonCamera(camera, valley);
@@ -89,7 +89,10 @@ const world = {
 const quests = new Quests(events, world);
 
 const hud = new Hud();
-const session = new Session(events, scene, player, inventory);
+const session = new Session({
+  events, scene, player, inventory, entities, combat, shouts, levels, dragon,
+  enemies: [...creatures, dragon], onHurt: guestHurt,
+});
 const coopPanel = new CoopPanel(session);
 const menu = new Menu(inventory, skills, player, shouts, coopPanel);
 const input = new Input(renderer.domElement, $('joy'), $('joy-knob'), {
@@ -201,7 +204,8 @@ events.on('damage', ({ target }) => {
 events.on('blocked', ({ target }) => { if (target === player) tpCam.shake(SHAKE.block); });
 events.on('death', ({ target, killer }) => {
   if (target === player) { hud.showDeath(true); return; }
-  if (target.kind === 'wolf' && killer === player) {
+  // Loot is per-player: in co-op everyone in the same place gets their own drop
+  if (target.kind === 'wolf' && target.level === player.level && (killer === player || session.active)) {
     inventory.add(target === world.alpha ? CONFIG.loot.alphaDrop : CONFIG.loot.wolfDrop);
   }
 });
@@ -222,7 +226,16 @@ events.on('shout', ({ id }) => tpCam.shake(id === 'slowTime' ? 0.15 : 0.35));
 events.on('bowToggled', ({ bowMode }) => hud.toast(bowMode ? 'Bow drawn: hold to aim, release to shoot' : 'Sword drawn'));
 events.on('netPlayerJoined', ({ name }) => { hud.toast(`${name} joined the game`); if (menu.open) menu.render(); });
 events.on('netPlayerLeft', ({ name }) => { hud.toast(`${name} left the game`); if (menu.open) menu.render(); });
-events.on('netEnded', ({ reason }) => { hud.toast(reason); if (menu.open) menu.render(); });
+events.on('netJoined', () => { guestWorld = worldJSON(); });
+events.on('netEnded', ({ reason, wasGuest }) => {
+  hud.toast(reason);
+  if (menu.open) menu.render();
+  if (wasGuest) {           // back to our own world: keep the character, reload our world
+    save();
+    resetting = true;
+    hud.fade(() => location.reload(), 1.2);
+  }
+});
 events.on('dragonRoar', () => { hud.announce('A dragon approaches!'); tpCam.shake(0.45); });
 events.on('dragonDowned', () => hud.toast('The dragon crashes to the ground!'));
 events.on('dragonDead', () => {
@@ -233,8 +246,29 @@ events.on('dragonDead', () => {
   save();
 });
 
+// Co-op guest: an enemy (run by the host) hit us. Apply it with our own armour and block skill.
+function guestHurt(damage, blocked, from) {
+  if (!player.alive) return;
+  const attacker = { pos: from };
+  let amount = blocked ? damage * (1 - player.blockReduction) : damage;
+  amount = player.mitigate(amount);
+  player.hp = Math.max(0, player.hp - amount);
+  player.onHit({ amount, attacker, blocked });
+  events.emit(blocked ? 'blocked' : 'damage', { target: player, attacker, amount, source: 'melee' });
+  if (player.hp <= 0) { player.die(); events.emit('death', { target: player, killer: attacker }); }
+}
+
 // ---- Save / load ----
 let resetting = false;
+let guestWorld = null;   // while a co-op guest: our own world, kept as it was before joining
+function worldJSON() {
+  return {
+    chests: chests.filter(c => c.opened).map(c => c.key),
+    dead: creatures.filter(w => w.key && !w.alive).map(w => w.key),
+    dragonDead: dragon.state === 'dead',
+    visited,
+  };
+}
 function save() {
   if (resetting || !started || !player.alive) return;
   writeSave({
@@ -243,12 +277,7 @@ function save() {
     skills: skills.toJSON(),
     shouts: shouts.toJSON(),
     quests: quests.toJSON(),
-    world: {
-      chests: chests.filter(c => c.opened).map(c => c.key),
-      dead: creatures.filter(w => w.key && !w.alive).map(w => w.key),
-      dragonDead: dragon.state === 'dead',
-      visited,
-    },
+    world: session.role === 'guest' && guestWorld ? guestWorld : worldJSON(),
   });
 }
 
@@ -354,15 +383,17 @@ function tick(dt, controls) {
   // Enemies run on slowed time while Slow Time is active; players never do
   const edt = dt * shouts.timeScale;
   player.tick(dt, cmd, tpCam.yaw);
-  for (const c of creatures) c.tick(edt);
-  dragon.tick(edt);
+  if (session.role !== 'guest') {   // co-op guests mirror the host's enemies instead
+    for (const c of creatures) c.tick(edt);
+    dragon.tick(edt);
+  }
   projectiles.update(dt);
   shouts.update(dt);
   separateBodies(entities);
 
   // Quest flow: Dragon Rising follows The Howling Den; the dragon comes when you're back outside
   if (quests.isDone('howlingDen')) quests.start('dragonRising');
-  if (quests.stepText('dragonRising') === 'Slay the dragon' && dragon.state === 'inactive'
+  if (session.role !== 'guest' && quests.stepText('dragonRising') === 'Slay the dragon' && dragon.state === 'inactive'
     && player.level === valley && player.alive) {
     if ((dragonTimer += dt) > CONFIG.dragon.arriveDelay) dragon.activate(player);
   }
@@ -399,13 +430,13 @@ function frame(now) {
   }
 
   const alpha = playing ? acc / STEP : 1;
+  if (started) session.update(dt);   // sends our pose; on guests, moves enemies to the host's state
   player.render(alpha, renderPos);
   for (const c of creatures) c.render(alpha);
   dragon.render(alpha);
   for (const c of chests) c.update(dt);
   for (const d of Object.values(dungeons)) d.update(dt);
   if (playing) fx.update(dt * (shouts.timeScale < 1 ? 0.6 : 1));
-  if (started) session.update(dt);
   session.render(dt, player.level.key ?? 'valley', levels);
   hud.setCoop(session);
   tpCam.update(dt, renderPos);
@@ -429,7 +460,8 @@ function frame(now) {
   hud.setMarker(mark, camera, player.pos);
   hud.setShout(shouts);
   hud.setBow(player);
-  hud.setSlow(shouts.slowLeft > 0);
+  hud.setSlow(shouts.slowLeft > 0 || (session.role === 'guest' && session.mirror.slow));
+  if (session.role === 'guest' && dragon.state === 'soul' && Math.random() < 0.5) fx.soul({ x: dragon.pos.x, y: dragon.pos.y + 2, z: dragon.pos.z }, player.pos, 2);
   hud.setBoss(dragon.alive && player.level === valley ? dragon : null);
 
   hud.frame(dt, player);
