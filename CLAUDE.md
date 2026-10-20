@@ -76,7 +76,8 @@ end of every piece of work (what's done, what's next).
   - Random dragon hunts, scaling difficulty
   - Dungeons respawn with better loot
   - Hidden 4th shout in the hardest dungeon
-  - New Game+ (keep skills, harder enemies)
+  - No New Game+ offer (removed on request); "Start a new game" on the start screen is a full
+    reset behind a Yes / No check. Old NG+ saves (`ng`) keep their harder enemies
 - Target length: 3–5 hours main story
 
 ## Out of scope (do NOT add)
@@ -164,8 +165,8 @@ src/
 - **Main story:** The Jarl's Summons → The Howling Den → Dragon Rising → The Way of the Voice (Greybeards,
   High Hrothgar, Ustengrav, the Horn) → The World-Eater. Story switches live in `flags`.
 - **Post-game** (after `flags.victory`): random dragon attacks, dungeons refill with a higher
-  `tier` (better chests; their enemies scale with your level), Ice Form secret wall, New Game+
-  (`ng` in the save; keeps skills, scales enemies via `CONFIG.postGame`).
+  `tier` (better chests; their enemies scale with your level), Ice Form secret wall. New Game+ is no longer offered;
+  old saves may still carry `ng`, which scales enemies via `CONFIG.postGame`.
 - **Creatures** share one AI (`entities/creature.js`); a config section picks the body
   (`body: 'wolf' | 'draugr'`). Bosses have `boss: true` + `saveKey`. `team`/`hunts` make
   guards (team 'player', hunting 'beast'); `raider: true` marches on the village and hits barricades.
