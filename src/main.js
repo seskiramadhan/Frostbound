@@ -578,7 +578,6 @@ function victory() {
     enterLevel(valley, Math.PI);
     hud.showEnding(() => {
       hud.toast('Post-game: dragons still roam, dungeons refill, and a hidden word wall stirs in Bleakrock Barrow.');
-      hud.toast('Talk to Jarl Balgrim to begin New Game+.');
     });
     save();
   }, 1.2), 4500);
@@ -716,12 +715,6 @@ function refillDungeon(d, quiet = false) {
   if (!quiet) hud.toast(`${d.name} has new occupants... and new treasure`);
 }
 
-function newGamePlus() {
-  resetting = true;
-  writeSave({ ng: ng + 1, hunts: huntsWon, skills: skills.toJSON(), spells: player.knowsFire ? ['fire'] : [], shouts: { known: [], selected: null } });
-  hud.fade(() => location.reload(), 0.8);
-}
-
 // Co-op guest: an enemy (run by the host) hit us. Apply it with our own armour and block skill.
 function guestHurt(damage, blocked, from) {
   if (!player.alive) return;
@@ -848,7 +841,15 @@ $('coop-start').addEventListener('click', e => {
   hud.showOverlay(false);
   openMenu('coop');
 });
-$('newgame').addEventListener('click', e => {
+// "Start a new game" deletes the save, so it asks first (Yes / No).
+const askNewGame = show => {
+  $('newgame-confirm').style.display = show ? 'block' : 'none';
+  for (const id of ['newgame', 'coop-start']) $(id).style.visibility = show ? 'hidden' : '';
+};
+$('newgame').addEventListener('click', e => { e.stopPropagation(); askNewGame(true); });
+$('newgame-no').addEventListener('click', e => { e.stopPropagation(); askNewGame(false); });
+$('newgame-confirm').addEventListener('click', e => e.stopPropagation());
+$('newgame-yes').addEventListener('click', e => {
   e.stopPropagation();
   resetting = true;
   clearSave();
@@ -858,8 +859,7 @@ $('newgame').addEventListener('click', e => {
 // ---- Villagers: talk, trade, rest ----
 const VIL = CONFIG.village;
 const talkCtx = {
-  quests, inventory, flags, player, newGamePlus, jobs,
-  get ng() { return ng; },
+  quests, inventory, flags, player, jobs,
   get isGuest() { return session.role === 'guest'; },
   get shopClosed() { return Date.now() < shopClosedUntil; },
   done: line => dialog.say(line),
@@ -905,7 +905,6 @@ function tradeView() {
 function openDialog(npc) {
   if (dialog.open || menu.open) return;
   tradeMode = false;
-  talkCtx.confirmNg = false;
   talkCtx.jobOffer = null;
   dialog.show(npc, () => (tradeMode ? tradeView() : talk(npc.id, talkCtx)));
   if (!IS_TOUCH) document.exitPointerLock?.();

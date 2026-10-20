@@ -34,8 +34,8 @@
   .panel td { padding: 3px 10px; }
   .panel td:first-child { text-align: right; color: #b9c9d6; }
 
-  #clock {
-    position: fixed; top: calc(max(8px, env(safe-area-inset-top)) + 16px); right: 10px; z-index: 5;
+  #clock {                                /* left of the Bag button */
+    position: fixed; top: calc(max(8px, env(safe-area-inset-top)) + 48px); right: calc(max(10px, env(safe-area-inset-right)) + 60px); z-index: 5;
     font: 12px Georgia, serif; color: #f2efe6; opacity: 0.75; pointer-events: none; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
   }
   #fps {
@@ -159,6 +159,16 @@
     display: none; margin: -14px 0 22px; padding: 6px 14px; background: none; color: #f2efe6; opacity: 0.7;
     border: 1px solid rgba(242, 239, 230, 0.35); font: italic 13px Georgia, serif; cursor: pointer;
   }
+  #newgame-confirm {
+    display: none; margin: -12px auto 20px; padding: 12px 14px; max-width: 300px; color: #f2efe6;
+    background: rgba(22, 26, 30, 0.92); border: 1px solid rgba(232, 200, 106, 0.6); font: 14px Georgia, serif;
+  }
+  #newgame-confirm small { opacity: 0.7; font-size: 12px; }
+  #newgame-confirm button {
+    margin: 10px 6px 0; padding: 8px 18px; background: none; color: #f2efe6; cursor: pointer;
+    border: 1px solid rgba(242, 239, 230, 0.5); font: 14px Georgia, serif;
+  }
+  #newgame-yes { border-color: #c0503a !important; color: #f0b0a0 !important; }
 
   #menu {
     position: fixed; inset: 0; z-index: 9; display: none; align-items: center; justify-content: center;
@@ -292,6 +302,11 @@
     <div class="cta" id="cta">Begin</div><br>
     <button id="newgame">Start a new game</button>
     <button id="coop-start">Play with friends</button><br>
+    <div id="newgame-confirm">
+      <div>Delete your save and start over?<br><small>Skills, items, shouts and quests will be lost.</small></div>
+      <button id="newgame-yes">Yes, delete</button>
+      <button id="newgame-no">No</button>
+    </div>
     <button id="update-now">New version available: tap to update</button>
     <table id="help-desktop">
       <tr><td>W A S D</td><td>Move</td></tr>

@@ -1,7 +1,7 @@
 # NEXT.md — where Frostbound stands and what's pending
 
 Read this first in a new session, then `CLAUDE.md` for the rules.
-Last updated: 2026-10-19. **Live: build 7**; build 8 (Skyrim-ish village names) is in a PR.
+Last updated: 2026-10-20. **Live: build 8**; build 9 (start-screen Yes/No, no New Game+ at the Jarl) is in a PR.
 **Next:** the user playtests (PC + iPad + phone, solo and co-op) and sends notes; fix those in one PR.
 
 ## Live now
@@ -19,9 +19,10 @@ https://seskiramadhan.github.io/Frostbound/ (merging into `master` deploys; play
 | Round 7 | Main story: the Greybeards, The Way of the Voice, Ustengrav | #19 |
 | Round 8 | Day/night (night raids) + rocks you can stand on | #20 |
 | Camera | Look up freely (sky, dragons overhead): the camera keeps its angle when the ground pushes it up (build 7) | #22 |
-| Names | Village names that sound like Skyrim but aren't real: Riverholt, Jarl Balgrim, Lukas, Delphina (the inn's "mysterious friend"), Faendir the Hunter, Alvar, the Snoring Giant; the Greybeards are Masters Arnveir, Borvi and Einhart (build 8) | names PR |
+| Names | Village names that sound like Skyrim but aren't real: Riverholt, Jarl Balgrim, Lukas, Delphina (the inn's "mysterious friend"), Faendir the Hunter, Alvar, the Snoring Giant; the Greybeards are Masters Arnveir, Borvi and Einhart (build 8) | #23 |
+| Safer restarts | "Start a new game" asks Yes / No before deleting the save; the Jarl's New Game+ option removed (user's call); clock moved left of the Bag button (build 9) | start-confirm PR |
 
-## The game today (build 8)
+## The game today (build 9)
 
 **Main story (close to Skyrim):** The Jarl's Summons (Jarl Balgrim) → The Howling Den (Frostfang Den, Alpha
 Wolf; TIID word wall) → Dragon Rising (Bleakrock Barrow, FUS word wall, the first dragon, its soul gives
@@ -39,7 +40,7 @@ the Barrow (Delphina), Bandits in the Woods (Faendir), plus the Jarl's repeatabl
 - **Enemy levels** (`systems/levels.js`): fixed enemies keep their design level (valley wolves 1, den 1 /
   Alpha 3, barrow draugr 4 / Wight 6, Ustengrav, story dragon, World-Eater). Scaling ones match your level:
   bandits, raiders, raid guards, hunt/attack dragons, refilled dungeons (+10% HP, +6% damage per level).
-  Health bars show "Lv". NG+ stacks on top.
+  Health bars show "Lv". Old New Game+ saves keep their extra enemy toughness on top.
 - **Shouts:** FUS (Push), TIID (Slow Time), YOL (Fire Breath), hidden IIZ (Ice Form, after victory).
   Hold the Shout button / R to switch.
 - **Sneak:** crouch (button / C), gradual noticing, stealth eye, sneak attacks (x3 sword, x2 arrow,
@@ -54,7 +55,8 @@ the Barrow (Delphina), Bandits in the Woods (Faendir), plus the Jarl's repeatabl
 - **Day/night:** 12-minute days in the valley, moonlit nights with the player's lantern; sleeping at
   the inn skips to morning. **Rocks** are standable (jump onto low ones).
 - **Post-game:** random dragon attacks, dungeons refill (better loot; enemies scale), Ice Form wall,
-  New Game+ from the Jarl.
+  no New Game+ (removed from the Jarl on request: Skyrim has none; the start screen's "Start a new game" is a
+  full reset and asks Yes / No first).
 - **Co-op** (protocol v9): host runs enemies, raids, hunts and the clock; guests mirror them.
 
 **Saves:** `frostbound.save.v1` in each browser (per device). Every round keeps old saves loading.

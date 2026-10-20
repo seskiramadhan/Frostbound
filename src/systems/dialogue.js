@@ -1,7 +1,7 @@
 // What each villager says, depending on quest progress. talk() returns
 // { text, options: [{ label, run }] }; run() changes state and returns true to keep the
 // conversation open (it is redrawn), or false to close it.
-// ctx: { quests, inventory, flags, player, trade(), rest(), done(msg), newGamePlus(), ng,
+// ctx: { quests, inventory, flags, player, trade(), rest(), done(msg),
 //        jobs, jobOffer, isGuest, shopClosed }
 import { CONFIG } from '../config.js';
 import { RETURN_TEXT } from './jobs.js';
@@ -63,15 +63,7 @@ function jarl(c) {
       ? 'The dragon circles the valley. Use the bow when it flies, and the Voice to bring it down.'
       : 'Bleakrock Barrow lies north, under the peak. The dead guard it. Find whatever the old Nords left there.';
   } else if (flags.victory) {
-    text = c.confirmNg
-      ? 'Begin anew? You will keep your skill, but the world forgets your deeds, and its beasts grow fiercer.'
-      : 'Hail, Dragonborn! The skies over Riverholt are clear for the first time in an age. Songs will be sung of you.';
-    if (c.confirmNg) {
-      o.push({ label: 'Yes, start New Game+', run: () => { c.newGamePlus(); return false; } });
-      o.push({ label: 'Not yet', run: () => { c.confirmNg = false; return true; } });
-    } else {
-      o.push({ label: `I wish to begin anew (New Game+${c.ng ? ` ${c.ng + 1}` : ''})`, run: () => { c.confirmNg = true; return true; } });
-    }
+    text = 'Hail, Dragonborn! The skies over Riverholt are clear for the first time in an age. Songs will be sung of you.';
   } else if (q.isActive('wayOfTheVoice')) {
     text = 'You heard it too, that voice from the mountain: "Dovahkiin." The Greybeards of High Hrothgar have summoned you. '
       + 'Their path climbs the mountain west of Bleakrock Barrow. Go. Few are ever called.';
